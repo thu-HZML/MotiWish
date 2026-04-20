@@ -5,7 +5,7 @@ from apps.common.models import TimeStampedModel
 
 class GachaPool(TimeStampedModel):
     name = models.CharField(max_length=80, verbose_name="卡池名称")
-    cost_primary = models.PositiveIntegerField(default=10, verbose_name="抽卡消耗")
+    cost_primary = models.PositiveIntegerField(default=1, verbose_name="抽卡消耗")
     base_secondary_reward = models.PositiveIntegerField(default=5, verbose_name="基础二级货币")
     bonus_rate = models.FloatField(default=0.15, verbose_name="小暴击概率")
     jackpot_rate = models.FloatField(default=0.03, verbose_name="大暴击概率")
