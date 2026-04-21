@@ -1,0 +1,2755 @@
+openapi: 3.0.3
+info:
+  title: MotiWish Backend API
+  version: 0.2.0
+  description: 面向安卓端游戏化时间管理应用的统一后端接口。
+paths:
+  /api/v1/ai/report-jobs/:
+    get:
+      operationId: api_v1_ai_report_jobs_list
+      summary: 获取 AI 报告任务列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAIReportJobListResponseList'
+          description: ''
+    post:
+      operationId: api_v1_ai_report_jobs_create
+      summary: 创建 AI 报告任务
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIReportJobCreateResponse'
+          description: ''
+  /api/v1/ai/report-jobs/{id}/:
+    get:
+      operationId: api_v1_ai_report_jobs_retrieve
+      summary: 获取单个 AI 报告任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI报告任务.
+        required: true
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIReportJobDetailResponse'
+          description: ''
+    put:
+      operationId: api_v1_ai_report_jobs_update
+      summary: 更新 AI 报告任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI报告任务.
+        required: true
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIReportJob'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIReportJob'
+          description: ''
+    patch:
+      operationId: api_v1_ai_report_jobs_partial_update
+      summary: 部分更新 AI 报告任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI报告任务.
+        required: true
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAIReportJob'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAIReportJob'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAIReportJob'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIReportJob'
+          description: ''
+    delete:
+      operationId: api_v1_ai_report_jobs_destroy
+      summary: 删除 AI 报告任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI报告任务.
+        required: true
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/common/health/:
+    get:
+      operationId: api_v1_common_health_retrieve
+      summary: 健康检查
+      tags:
+      - Common
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResponse'
+              examples:
+                健康检查响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 服务运行正常
+                    data:
+                      service: motiwish-backend
+                      status: ok
+          description: ''
+  /api/v1/common/legal-documents/:
+    get:
+      operationId: api_v1_common_legal_documents_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedLegalDocumentList'
+          description: ''
+  /api/v1/gacha/pools/:
+    get:
+      operationId: api_v1_gacha_pools_list
+      summary: 获取卡池列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Gacha
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGachaPoolListResponseList'
+          description: ''
+  /api/v1/gacha/pools/{id}/:
+    get:
+      operationId: api_v1_gacha_pools_retrieve
+      summary: 获取单个卡池
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 卡池.
+        required: true
+      tags:
+      - Gacha
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GachaPoolDetailResponse'
+          description: ''
+  /api/v1/gacha/pools/{id}/draw/:
+    post:
+      operationId: api_v1_gacha_pools_draw_create
+      summary: 执行一次抽卡
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 卡池.
+        required: true
+      tags:
+      - Gacha
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GachaPool'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GachaPool'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GachaPool'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GachaDrawResponse'
+          description: ''
+  /api/v1/gacha/records/:
+    get:
+      operationId: api_v1_gacha_records_list
+      summary: 获取抽卡记录
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Gacha
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGachaRecordListResponseList'
+          description: ''
+  /api/v1/gacha/records/{id}/:
+    get:
+      operationId: api_v1_gacha_records_retrieve
+      summary: 获取单条抽卡记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 抽卡记录.
+        required: true
+      tags:
+      - Gacha
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GachaRecordDetailResponse'
+          description: ''
+  /api/v1/reports/dashboard/:
+    get:
+      operationId: api_v1_reports_dashboard_retrieve
+      summary: 获取仪表盘报表
+      tags:
+      - Reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardReportResponse'
+          description: ''
+  /api/v1/shop/items/:
+    get:
+      operationId: api_v1_shop_items_list
+      summary: 获取愿望商品列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedWishItemListResponseList'
+          description: ''
+    post:
+      operationId: api_v1_shop_items_create
+      summary: 创建愿望商品
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishItemCreateResponse'
+          description: ''
+  /api/v1/shop/items/{id}/:
+    get:
+      operationId: api_v1_shop_items_retrieve
+      summary: 获取单个愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 愿望商品.
+        required: true
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishItemDetailResponse'
+          description: ''
+    put:
+      operationId: api_v1_shop_items_update
+      summary: 更新愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 愿望商品.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishItem'
+          description: ''
+    patch:
+      operationId: api_v1_shop_items_partial_update
+      summary: 部分更新愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 愿望商品.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedWishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedWishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedWishItem'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishItem'
+          description: ''
+    delete:
+      operationId: api_v1_shop_items_destroy
+      summary: 删除愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 愿望商品.
+        required: true
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/shop/items/{id}/redeem/:
+    post:
+      operationId: api_v1_shop_items_redeem_create
+      summary: 兑换愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 愿望商品.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WishItem'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishItemRedeemResponse'
+          description: ''
+  /api/v1/shop/redemptions/:
+    get:
+      operationId: api_v1_shop_redemptions_list
+      summary: 获取兑换记录
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRedemptionRecordListResponseList'
+          description: ''
+  /api/v1/shop/redemptions/{id}/:
+    get:
+      operationId: api_v1_shop_redemptions_retrieve
+      summary: 获取单条兑换记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 兑换记录.
+        required: true
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedemptionRecordDetailResponse'
+          description: ''
+  /api/v1/tasks/tasks/:
+    get:
+      operationId: api_v1_tasks_tasks_list
+      summary: 获取任务列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Tasks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskListResponseList'
+          description: ''
+    post:
+      operationId: api_v1_tasks_tasks_create
+      summary: 创建任务
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+            examples:
+              创建周期任务:
+                value:
+                  title: 背单词 30 分钟
+                  description: 每天晚饭后完成
+                  task_type: recurring
+                  recurrence: daily
+                  weekdays: []
+                  month_days: []
+                  metric_key: ''
+                  target_value: null
+                  progress_target: 100
+                  reward_primary: 15
+                  penalty_primary: 3
+                  starts_on: '2026-04-21'
+                  ends_on: null
+                  due_at: null
+                  status: active
+                  tags:
+                  - study
+                  - english
+                  ai_metadata:
+                    source: manual
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Task'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Task'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCreateResponse'
+          description: ''
+  /api/v1/tasks/tasks/{id}/:
+    get:
+      operationId: api_v1_tasks_tasks_retrieve
+      summary: 获取单个任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskRetrieveResponse'
+          description: ''
+    put:
+      operationId: api_v1_tasks_tasks_update
+      summary: 更新任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Task'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Task'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Task'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    patch:
+      operationId: api_v1_tasks_tasks_partial_update
+      summary: 部分更新任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTask'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    delete:
+      operationId: api_v1_tasks_tasks_destroy
+      summary: 删除任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tasks/tasks/{id}/complete/:
+    post:
+      operationId: api_v1_tasks_tasks_complete_create
+      summary: 完成并结算任务
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskAction'
+            examples:
+              任务结算请求:
+                value:
+                  occurrence_date: '2026-04-21'
+                  progress: 100
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskAction'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCompleteResponse'
+          description: ''
+  /api/v1/tasks/tasks/history/:
+    get:
+      operationId: api_v1_tasks_tasks_history_retrieve
+      summary: 获取任务历史记录
+      tags:
+      - Tasks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskHistoryResponse'
+          description: ''
+  /api/v1/tasks/tasks/today/:
+    get:
+      operationId: api_v1_tasks_tasks_today_retrieve
+      summary: 获取指定日期任务实例
+      parameters:
+      - in: query
+        name: date
+        schema:
+          type: string
+        description: 日期，格式 YYYY-MM-DD；不传则默认为今天
+      tags:
+      - Tasks
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskTodayResponse'
+          description: ''
+  /api/v1/users/auth/login/:
+    post:
+      operationId: api_v1_users_auth_login_create
+      summary: 用户登录
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+            examples:
+              登录请求:
+                value:
+                  username: alice
+                  password: Password123
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              examples:
+                登录成功响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 登录成功
+                    data:
+                      access: eyJhbGciOiJIUzI1NiIs...
+                      refresh: eyJhbGciOiJIUzI1NiIs...
+                      user:
+                        id: 1
+                        username: alice
+                        display_nickname: 爱丽丝
+          description: ''
+  /api/v1/users/auth/refresh/:
+    post:
+      operationId: api_v1_users_auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      summary: 刷新 JWT
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+            examples:
+              刷新令牌请求:
+                value:
+                  refresh: eyJhbGciOiJIUzI1NiIs...
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+              examples:
+                刷新令牌响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 刷新令牌成功
+                    data:
+                      access: eyJhbGciOiJIUzI1NiIs...
+          description: ''
+  /api/v1/users/auth/register/:
+    post:
+      operationId: api_v1_users_auth_register_create
+      summary: 用户注册
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+            examples:
+              注册请求:
+                value:
+                  username: alice
+                  email: alice@example.com
+                  password: Password123
+                  nickname: 爱丽丝
+                  gender: female
+                  occupation: student
+                  bio: 今天也要认真完成任务
+                  timezone: Asia/Shanghai
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              examples:
+                注册成功响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 注册成功
+                    data:
+                      access: eyJhbGciOiJIUzI1NiIs...
+                      refresh: eyJhbGciOiJIUzI1NiIs...
+                      user:
+                        id: 1
+                        username: alice
+                        email: alice@example.com
+                        nickname: 爱丽丝
+                        display_nickname: 爱丽丝
+                        avatar: null
+                        avatar_url: null
+                        default_avatar_group: female-default-1
+                        gender: female
+                        birth_date: null
+                        occupation: student
+                        bio: 今天也要认真完成任务
+                        timezone: Asia/Shanghai
+                        onboarding_completed: false
+                        prompt_profile:
+                          nickname: 爱丽丝
+                          gender: female
+                          birth_date: null
+                          occupation: student
+                          bio: 今天也要认真完成任务
+                          timezone: Asia/Shanghai
+                          avatar_present: false
+                          default_avatar_group: female-default-1
+          description: ''
+  /api/v1/users/me/:
+    get:
+      operationId: api_v1_users_me_retrieve
+      summary: 获取当前用户资料
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+          description: ''
+    patch:
+      operationId: api_v1_users_me_partial_update
+      summary: 更新当前用户资料
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+            examples:
+              更新资料请求:
+                value:
+                  nickname: 时间炼金师
+                  gender: male
+                  birth_date: '2003-09-10'
+                  occupation: student
+                  bio: 把每一天炼成愿望的燃料
+                  timezone: Asia/Shanghai
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileUpdateResponse'
+          description: ''
+  /api/v1/wallet/:
+    get:
+      operationId: api_v1_wallet_retrieve
+      summary: 获取钱包余额
+      tags:
+      - Wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDetailResponse'
+          description: ''
+  /api/v1/wallet/transactions/:
+    get:
+      operationId: api_v1_wallet_transactions_retrieve
+      summary: 获取钱包流水
+      parameters:
+      - in: query
+        name: currency_type
+        schema:
+          type: string
+        description: primary / secondary
+      - in: query
+        name: reason
+        schema:
+          type: string
+        description: task_reward / task_penalty / gacha_cost / gacha_reward / shop_redeem
+          / manual_adjust
+      tags:
+      - Wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransactionListResponse'
+          description: ''
+components:
+  schemas:
+    AIReportJob:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        report_type:
+          $ref: '#/components/schemas/ReportTypeEnum'
+        summary:
+          type: string
+          readOnly: true
+          title: 报告摘要
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AIReportJobStatusEnum'
+          readOnly: true
+        prompt_context: {}
+        result_payload:
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - owner
+      - report_type
+      - result_payload
+      - status
+      - summary
+      - updated_at
+    AIReportJobCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIReportJob'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIReportJobDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIReportJob'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIReportJobListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIReportJob'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIReportJobStatusEnum:
+      enum:
+      - pending
+      - done
+      - failed
+      type: string
+      description: |-
+        * `pending` - 待生成
+        * `done` - 已完成
+        * `failed` - 失败
+    CurrencyTypeEnum:
+      enum:
+      - primary
+      - secondary
+      type: string
+      description: |-
+        * `primary` - 一级货币
+        * `secondary` - 二级货币
+    DashboardReportPayload:
+      type: object
+      properties:
+        wallet:
+          $ref: '#/components/schemas/DashboardWalletData'
+        task_stats:
+          $ref: '#/components/schemas/DashboardTaskStats'
+      required:
+      - task_stats
+      - wallet
+    DashboardReportResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DashboardReportPayload'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    DashboardTaskStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        completed:
+          type: integer
+      required:
+      - completed
+      - total
+    DashboardWalletData:
+      type: object
+      properties:
+        primary_balance:
+          type: integer
+        secondary_balance:
+          type: integer
+      required:
+      - primary_balance
+      - secondary_balance
+    DocumentTypeEnum:
+      enum:
+      - terms
+      - privacy
+      - data_collection
+      - children
+      type: string
+      description: |-
+        * `terms` - 用户服务协议
+        * `privacy` - 隐私政策
+        * `data_collection` - 个人信息收集清单
+        * `children` - 未成年人说明
+    GachaDrawRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        pool:
+          allOf:
+          - $ref: '#/components/schemas/GachaPool'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        cost_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 消耗一级货币
+        reward_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 获得二级货币
+        multiplier:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 命中倍率
+        is_bonus:
+          type: boolean
+          title: 是否小暴击
+        is_jackpot:
+          type: boolean
+          title: 是否大暴击
+        is_pity:
+          type: boolean
+          title: 是否保底
+        owner:
+          type: integer
+        cost_transaction:
+          type: integer
+          nullable: true
+        reward_transaction:
+          type: integer
+          nullable: true
+      required:
+      - cost_primary
+      - created_at
+      - id
+      - multiplier
+      - owner
+      - pool
+      - reward_secondary
+      - updated_at
+    GachaDrawResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/GachaDrawRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GachaPool:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        name:
+          type: string
+          title: 卡池名称
+          maxLength: 80
+        cost_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 抽卡消耗
+        base_secondary_reward:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 基础二级货币
+        bonus_rate:
+          type: number
+          format: double
+          title: 小暴击概率
+        jackpot_rate:
+          type: number
+          format: double
+          title: 大暴击概率
+        bonus_multiplier:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 小暴击倍率
+        jackpot_multiplier:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 大暴击倍率
+        pity_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 保底阈值
+        pity_multiplier:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 保底倍率
+        is_active:
+          type: boolean
+          title: 是否启用
+      required:
+      - created_at
+      - id
+      - name
+      - updated_at
+    GachaPoolDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/GachaPool'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GachaPoolListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GachaPool'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GachaRecordDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/GachaDrawRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GachaRecordListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GachaDrawRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GenderEnum:
+      enum:
+      - male
+      - female
+      - unknown
+      type: string
+      description: |-
+        * `male` - 男
+        * `female` - 女
+        * `unknown` - 未知
+    HealthCheckResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: {}
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    JWTToken:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+      required:
+      - access
+      - refresh
+      - user
+    LegalDocument:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        document_type:
+          allOf:
+          - $ref: '#/components/schemas/DocumentTypeEnum'
+          title: 文档类型
+        title:
+          type: string
+          title: 标题
+          maxLength: 100
+        version:
+          type: string
+          title: 版本号
+          maxLength: 32
+        summary:
+          type: string
+          title: 摘要
+          maxLength: 255
+        content:
+          type: string
+          title: 正文
+        effective_at:
+          type: string
+          format: date-time
+          title: 生效时间
+        prompt_notes:
+          title: 提示词补充信息
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - content
+      - document_type
+      - effective_at
+      - id
+      - title
+      - updated_at
+      - version
+    Login:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    LoginResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/JWTToken'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    OccupationEnum:
+      enum:
+      - employee
+      - student
+      - teacher
+      - other
+      type: string
+      description: |-
+        * `employee` - 上班族
+        * `student` - 学生
+        * `teacher` - 教师
+        * `other` - 其他
+    PaginatedAIReportJobListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIReportJobListResponse'
+    PaginatedGachaPoolListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/GachaPoolListResponse'
+    PaginatedGachaRecordListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/GachaRecordListResponse'
+    PaginatedLegalDocumentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalDocument'
+    PaginatedRedemptionRecordListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedemptionRecordListResponse'
+    PaginatedTaskListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskListResponse'
+    PaginatedWishItemListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/WishItemListResponse'
+    PatchedAIReportJob:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        report_type:
+          $ref: '#/components/schemas/ReportTypeEnum'
+        summary:
+          type: string
+          readOnly: true
+          title: 报告摘要
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AIReportJobStatusEnum'
+          readOnly: true
+        prompt_context: {}
+        result_payload:
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+    PatchedProfileUpdate:
+      type: object
+      properties:
+        nickname:
+          type: string
+          title: 昵称
+          maxLength: 50
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          title: 头像
+        gender:
+          allOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          title: 性别
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          title: 生日
+        occupation:
+          allOf:
+          - $ref: '#/components/schemas/OccupationEnum'
+          title: 职业
+        bio:
+          type: string
+          title: 个人签名
+          maxLength: 100
+        timezone:
+          type: string
+          title: 时区
+          maxLength: 50
+    PatchedTask:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 任务标题
+          maxLength: 120
+        description:
+          type: string
+          title: 任务描述
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          title: 任务类型
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceEnum'
+        weekdays:
+          title: 周重复设置
+        month_days:
+          title: 月重复设置
+        metric_key:
+          type: string
+          title: 系统指标键
+          maxLength: 50
+        target_value:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          title: 目标值
+        progress_target:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 进度目标
+        reward_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币奖励
+        penalty_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币惩罚
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+          title: 开始日期
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 截止时间
+        status:
+          $ref: '#/components/schemas/TaskStatusEnum'
+        tags:
+          title: 标签
+        ai_metadata:
+          title: AI评估数据
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+    PatchedWishItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        title:
+          type: string
+          title: 愿望名称
+          maxLength: 120
+        description:
+          type: string
+          title: 愿望描述
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        price_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 二级货币定价
+        inventory:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          title: 库存
+        is_enabled:
+          type: boolean
+          title: 是否上架
+        ai_pricing:
+          title: AI定价数据
+        owner:
+          type: integer
+          readOnly: true
+          title: 所属用户
+    ProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ProfileUpdateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/User'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ReasonEnum:
+      enum:
+      - task_reward
+      - task_penalty
+      - gacha_cost
+      - gacha_reward
+      - shop_redeem
+      - manual_adjust
+      type: string
+      description: |-
+        * `task_reward` - 任务奖励
+        * `task_penalty` - 任务惩罚
+        * `gacha_cost` - 抽卡消耗
+        * `gacha_reward` - 抽卡奖励
+        * `shop_redeem` - 商店兑换
+        * `manual_adjust` - 后台调整
+    RecurrenceEnum:
+      enum:
+      - none
+      - daily
+      - weekly
+      - monthly
+      type: string
+      description: |-
+        * `none` - 不重复
+        * `daily` - 每天
+        * `weekly` - 每周
+        * `monthly` - 每月
+    RedemptionRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/WishItem'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        cost_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 消耗二级货币
+        status:
+          $ref: '#/components/schemas/RedemptionRecordStatusEnum'
+        note:
+          type: string
+          title: 备注
+          maxLength: 255
+        owner:
+          type: integer
+        transaction:
+          type: integer
+          nullable: true
+      required:
+      - cost_secondary
+      - created_at
+      - id
+      - item
+      - owner
+      - updated_at
+    RedemptionRecordDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    RedemptionRecordListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    RedemptionRecordStatusEnum:
+      enum:
+      - requested
+      - fulfilled
+      - rejected
+      type: string
+      description: |-
+        * `requested` - 待处理
+        * `fulfilled` - 已兑现
+        * `rejected` - 已拒绝
+    Register:
+      type: object
+      properties:
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: 邮箱
+          maxLength: 254
+        password:
+          type: string
+          writeOnly: true
+          minLength: 8
+        nickname:
+          type: string
+          title: 昵称
+          maxLength: 50
+        gender:
+          allOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          title: 性别
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          title: 生日
+        occupation:
+          allOf:
+          - $ref: '#/components/schemas/OccupationEnum'
+          title: 职业
+        bio:
+          type: string
+          title: 个人签名
+          maxLength: 100
+        timezone:
+          type: string
+          title: 时区
+          maxLength: 50
+      required:
+      - email
+      - password
+      - username
+    RegisterResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/JWTToken'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ReportTypeEnum:
+      enum:
+      - daily
+      - monthly
+      type: string
+      description: |-
+        * `daily` - 日报
+        * `monthly` - 月报
+    SourceEnum:
+      enum:
+      - manual
+      - system
+      type: string
+      description: |-
+        * `manual` - 用户创建
+        * `system` - 系统推荐
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 任务标题
+          maxLength: 120
+        description:
+          type: string
+          title: 任务描述
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          title: 任务类型
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceEnum'
+        weekdays:
+          title: 周重复设置
+        month_days:
+          title: 月重复设置
+        metric_key:
+          type: string
+          title: 系统指标键
+          maxLength: 50
+        target_value:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+          title: 目标值
+        progress_target:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 进度目标
+        reward_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币奖励
+        penalty_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币惩罚
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+          title: 开始日期
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 截止时间
+        status:
+          $ref: '#/components/schemas/TaskStatusEnum'
+        tags:
+          title: 标签
+        ai_metadata:
+          title: AI评估数据
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - created_at
+      - id
+      - task_type
+      - title
+      - updated_at
+    TaskAction:
+      type: object
+      properties:
+        occurrence_date:
+          type: string
+          format: date
+        progress:
+          type: integer
+          minimum: 0
+    TaskCompleteResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TaskOccurrence'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Task'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskHistoryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskOccurrence'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskOccurrence:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        task:
+          allOf:
+          - $ref: '#/components/schemas/Task'
+          readOnly: true
+        occurrence_date:
+          type: string
+          format: date
+          title: 发生日期
+        status:
+          $ref: '#/components/schemas/TaskOccurrenceStatusEnum'
+        progress:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 完成进度
+        settled_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 结算时间
+        reward_transaction_id:
+          type: integer
+          nullable: true
+          readOnly: true
+        penalty_transaction_id:
+          type: integer
+          nullable: true
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - created_at
+      - id
+      - occurrence_date
+      - penalty_transaction_id
+      - reward_transaction_id
+      - task
+      - updated_at
+    TaskOccurrenceStatusEnum:
+      enum:
+      - pending
+      - completed
+      - missed
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - 待完成
+        * `completed` - 已完成
+        * `missed` - 已错过
+        * `cancelled` - 已取消
+    TaskRetrieveResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Task'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskStatusEnum:
+      enum:
+      - active
+      - archived
+      type: string
+      description: |-
+        * `active` - 启用
+        * `archived` - 归档
+    TaskTodayResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskOccurrence'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskTypeEnum:
+      enum:
+      - daily
+      - recurring
+      - one_time
+      type: string
+      description: |-
+        * `daily` - 日常任务
+        * `recurring` - 周期任务
+        * `one_time` - 一次性任务
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - access
+      - refresh
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          title: 用户名
+          description: 必填；长度为150个字符或以下；只能包含字母、数字、特殊字符“@”、“.”、“-”和“_”。
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: 邮箱
+          maxLength: 254
+        nickname:
+          type: string
+          title: 昵称
+          maxLength: 50
+        display_nickname:
+          type: string
+          readOnly: true
+        avatar:
+          type: string
+          format: uri
+          nullable: true
+          title: 头像
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          readOnly: true
+        default_avatar_group:
+          type: string
+          readOnly: true
+        gender:
+          allOf:
+          - $ref: '#/components/schemas/GenderEnum'
+          title: 性别
+        birth_date:
+          type: string
+          format: date
+          nullable: true
+          title: 生日
+        occupation:
+          allOf:
+          - $ref: '#/components/schemas/OccupationEnum'
+          title: 职业
+        bio:
+          type: string
+          title: 个人签名
+          maxLength: 100
+        timezone:
+          type: string
+          title: 时区
+          maxLength: 50
+        onboarding_completed:
+          type: boolean
+          title: 是否完成引导
+        prompt_profile:
+          readOnly: true
+      required:
+      - avatar_url
+      - default_avatar_group
+      - display_nickname
+      - email
+      - id
+      - prompt_profile
+      - username
+    Wallet:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        primary_balance:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币余额
+        secondary_balance:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 二级货币余额
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - created_at
+      - id
+      - updated_at
+    WalletDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Wallet'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WalletTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        currency_type:
+          allOf:
+          - $ref: '#/components/schemas/CurrencyTypeEnum'
+          title: 货币类型
+        reason:
+          allOf:
+          - $ref: '#/components/schemas/ReasonEnum'
+          title: 交易原因
+        delta:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          title: 变动值
+        balance_before:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 变更前余额
+        balance_after:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 变更后余额
+        reference_type:
+          type: string
+          title: 引用对象类型
+          maxLength: 50
+        reference_id:
+          type: string
+          title: 引用对象ID
+          maxLength: 50
+        memo:
+          type: string
+          title: 备注
+          maxLength: 255
+        payload:
+          title: 扩展数据
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+      required:
+      - balance_after
+      - balance_before
+      - created_at
+      - currency_type
+      - delta
+      - id
+      - reason
+    WalletTransactionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        title:
+          type: string
+          title: 愿望名称
+          maxLength: 120
+        description:
+          type: string
+          title: 愿望描述
+        source:
+          $ref: '#/components/schemas/SourceEnum'
+        price_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 二级货币定价
+        inventory:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          title: 库存
+        is_enabled:
+          type: boolean
+          title: 是否上架
+        ai_pricing:
+          title: AI定价数据
+        owner:
+          type: integer
+          readOnly: true
+          title: 所属用户
+      required:
+      - created_at
+      - id
+      - owner
+      - price_secondary
+      - title
+      - updated_at
+    WishItemCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WishItem'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishItemDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WishItem'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishItemListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WishItem'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishItemRedeemResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

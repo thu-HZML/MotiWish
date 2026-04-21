@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -18,7 +19,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    "rest_framework.authtoken",
     "drf_spectacular",
     "apps.common",
     "apps.users",
@@ -95,14 +95,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.User"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -113,10 +114,18 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
 
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=6),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=14),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "MotiWish Backend API",
     "DESCRIPTION": "面向安卓端游戏化时间管理应用的统一后端接口。",
-    "VERSION": "0.1.0",
+    "VERSION": "0.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1/", 
 }
