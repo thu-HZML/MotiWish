@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from rest_framework.generics import ListAPIView
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, inline_serializer
@@ -40,16 +39,8 @@ class HealthCheckView(APIView):
         )
 
 
-class ActiveLegalDocumentListView(ListAPIView):
+class ActiveLegalDocumentListView(APIView):
     permission_classes = [AllowAny]
-    serializer_class = LegalDocumentSerializer
-
-    def get_queryset(self):
-        queryset = LegalDocument.objects.filter(is_active=True)
-        document_type = self.request.query_params.get("document_type")
-        if document_type:
-            queryset = queryset.filter(document_type=document_type)
-        return queryset.order_by("document_type", "-effective_at")
 
     @extend_schema(
         tags=["Common"],
@@ -100,6 +91,8 @@ class ActiveLegalDocumentListView(ListAPIView):
                         "description": [
                             "用户服务协议：说明产品使用规则、账号责任与服务边界。",
                             "隐私政策：说明个人信息处理目的、方式、保存期限与用户权利。",
+                            "个人信息收集清单：说明收集字段、使用场景、是否必要。",
+                            "未成年人说明：说明监护、使用限制与个人信息保护补充要求。",
                         ],
                     },
                 },
@@ -107,9 +100,13 @@ class ActiveLegalDocumentListView(ListAPIView):
             )
         ],
     )
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+    def get(self, request):
+        queryset = LegalDocument.objects.filter(is_active=True)
+        document_type = request.query_params.get("document_type")
+        if document_type:
+            queryset = queryset.filter(document_type=document_type)
+        queryset = queryset.order_by("document_type", "-effective_at")
+        serializer = LegalDocumentSerializer(queryset, many=True)
         return api_response(
             data={
                 "documents": serializer.data,

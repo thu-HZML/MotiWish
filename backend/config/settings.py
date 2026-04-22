@@ -127,5 +127,8 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "面向安卓端游戏化时间管理应用的统一后端接口。",
     "VERSION": "0.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
-    "SCHEMA_PATH_PREFIX": r"/api/v1/", 
+    "SCHEMA_PATH_PREFIX": r"/api/v1/",
+    "PREPROCESSING_HOOKS": [
+        "apps.common.schema_hooks.exclude_internal_endpoints",
+    ],
 }

@@ -6,7 +6,7 @@ info:
 paths:
   /api/v1/ai/report-jobs/:
     get:
-      operationId: api_v1_ai_report_jobs_list
+      operationId: ai_report_jobs_list
       summary: 获取 AI 报告任务列表
       parameters:
       - name: page
@@ -27,7 +27,7 @@ paths:
                 $ref: '#/components/schemas/PaginatedAIReportJobListResponseList'
           description: ''
     post:
-      operationId: api_v1_ai_report_jobs_create
+      operationId: ai_report_jobs_create
       summary: 创建 AI 报告任务
       tags:
       - AI
@@ -54,7 +54,7 @@ paths:
           description: ''
   /api/v1/ai/report-jobs/{id}/:
     get:
-      operationId: api_v1_ai_report_jobs_retrieve
+      operationId: ai_report_jobs_retrieve
       summary: 获取单个 AI 报告任务
       parameters:
       - in: path
@@ -75,7 +75,7 @@ paths:
                 $ref: '#/components/schemas/AIReportJobDetailResponse'
           description: ''
     put:
-      operationId: api_v1_ai_report_jobs_update
+      operationId: ai_report_jobs_update
       summary: 更新 AI 报告任务
       parameters:
       - in: path
@@ -108,7 +108,7 @@ paths:
                 $ref: '#/components/schemas/AIReportJob'
           description: ''
     patch:
-      operationId: api_v1_ai_report_jobs_partial_update
+      operationId: ai_report_jobs_partial_update
       summary: 部分更新 AI 报告任务
       parameters:
       - in: path
@@ -140,7 +140,7 @@ paths:
                 $ref: '#/components/schemas/AIReportJob'
           description: ''
     delete:
-      operationId: api_v1_ai_report_jobs_destroy
+      operationId: ai_report_jobs_destroy
       summary: 删除 AI 报告任务
       parameters:
       - in: path
@@ -158,7 +158,7 @@ paths:
           description: No response body
   /api/v1/common/health/:
     get:
-      operationId: api_v1_common_health_retrieve
+      operationId: common_health_retrieve
       summary: 健康检查
       tags:
       - Common
@@ -183,16 +183,16 @@ paths:
           description: ''
   /api/v1/common/legal-documents/:
     get:
-      operationId: api_v1_common_legal_documents_list
+      operationId: common_legal_documents_retrieve
+      summary: 获取法律与隐私文档
       parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: document_type
         schema:
-          type: integer
+          type: string
+        description: 可选值：terms / privacy / data_collection / children
       tags:
-      - api
+      - Common
       security:
       - jwtAuth: []
       - {}
@@ -201,11 +201,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedLegalDocumentList'
+                $ref: '#/components/schemas/LegalDocumentsResponse'
+              examples:
+                法律文档响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取法律与隐私文档成功
+                    data:
+                      documents:
+                      - id: 1
+                        document_type: privacy
+                        title: MotiWish 隐私政策
+                        version: '2026.04'
+                        summary: 说明个人信息处理与用户权利。
+                        content: 我们会在提供任务、钱包与画像分析服务时处理必要的个人信息。
+                        effective_at: '2026-04-21T00:00:00+08:00'
+                        prompt_notes:
+                          used_in_ai_prompt:
+                          - gender
+                          - occupation
+                          - bio
+                          required_fields:
+                          - nickname
+                          - gender
+                        updated_at: '2026-04-21T00:00:00+08:00'
+                      description:
+                      - 用户服务协议：说明产品使用规则、账号责任与服务边界。
+                      - 隐私政策：说明个人信息处理目的、方式、保存期限与用户权利。
+                      - 个人信息收集清单：说明收集字段、使用场景、是否必要。
+                      - 未成年人说明：说明监护、使用限制与个人信息保护补充要求。
           description: ''
   /api/v1/gacha/pools/:
     get:
-      operationId: api_v1_gacha_pools_list
+      operationId: gacha_pools_list
       summary: 获取卡池列表
       parameters:
       - name: page
@@ -227,7 +256,7 @@ paths:
           description: ''
   /api/v1/gacha/pools/{id}/:
     get:
-      operationId: api_v1_gacha_pools_retrieve
+      operationId: gacha_pools_retrieve
       summary: 获取单个卡池
       parameters:
       - in: path
@@ -249,7 +278,7 @@ paths:
           description: ''
   /api/v1/gacha/pools/{id}/draw/:
     post:
-      operationId: api_v1_gacha_pools_draw_create
+      operationId: gacha_pools_draw_create
       summary: 执行一次抽卡
       parameters:
       - in: path
@@ -283,7 +312,7 @@ paths:
           description: ''
   /api/v1/gacha/records/:
     get:
-      operationId: api_v1_gacha_records_list
+      operationId: gacha_records_list
       summary: 获取抽卡记录
       parameters:
       - name: page
@@ -305,7 +334,7 @@ paths:
           description: ''
   /api/v1/gacha/records/{id}/:
     get:
-      operationId: api_v1_gacha_records_retrieve
+      operationId: gacha_records_retrieve
       summary: 获取单条抽卡记录
       parameters:
       - in: path
@@ -327,7 +356,7 @@ paths:
           description: ''
   /api/v1/reports/dashboard/:
     get:
-      operationId: api_v1_reports_dashboard_retrieve
+      operationId: reports_dashboard_retrieve
       summary: 获取仪表盘报表
       tags:
       - Reports
@@ -342,7 +371,7 @@ paths:
           description: ''
   /api/v1/shop/items/:
     get:
-      operationId: api_v1_shop_items_list
+      operationId: shop_items_list
       summary: 获取愿望商品列表
       parameters:
       - name: page
@@ -363,7 +392,7 @@ paths:
                 $ref: '#/components/schemas/PaginatedWishItemListResponseList'
           description: ''
     post:
-      operationId: api_v1_shop_items_create
+      operationId: shop_items_create
       summary: 创建愿望商品
       tags:
       - Shop
@@ -390,7 +419,7 @@ paths:
           description: ''
   /api/v1/shop/items/{id}/:
     get:
-      operationId: api_v1_shop_items_retrieve
+      operationId: shop_items_retrieve
       summary: 获取单个愿望商品
       parameters:
       - in: path
@@ -411,7 +440,7 @@ paths:
                 $ref: '#/components/schemas/WishItemDetailResponse'
           description: ''
     put:
-      operationId: api_v1_shop_items_update
+      operationId: shop_items_update
       summary: 更新愿望商品
       parameters:
       - in: path
@@ -444,7 +473,7 @@ paths:
                 $ref: '#/components/schemas/WishItem'
           description: ''
     patch:
-      operationId: api_v1_shop_items_partial_update
+      operationId: shop_items_partial_update
       summary: 部分更新愿望商品
       parameters:
       - in: path
@@ -476,7 +505,7 @@ paths:
                 $ref: '#/components/schemas/WishItem'
           description: ''
     delete:
-      operationId: api_v1_shop_items_destroy
+      operationId: shop_items_destroy
       summary: 删除愿望商品
       parameters:
       - in: path
@@ -494,7 +523,7 @@ paths:
           description: No response body
   /api/v1/shop/items/{id}/redeem/:
     post:
-      operationId: api_v1_shop_items_redeem_create
+      operationId: shop_items_redeem_create
       summary: 兑换愿望商品
       parameters:
       - in: path
@@ -528,7 +557,7 @@ paths:
           description: ''
   /api/v1/shop/redemptions/:
     get:
-      operationId: api_v1_shop_redemptions_list
+      operationId: shop_redemptions_list
       summary: 获取兑换记录
       parameters:
       - name: page
@@ -550,7 +579,7 @@ paths:
           description: ''
   /api/v1/shop/redemptions/{id}/:
     get:
-      operationId: api_v1_shop_redemptions_retrieve
+      operationId: shop_redemptions_retrieve
       summary: 获取单条兑换记录
       parameters:
       - in: path
@@ -572,7 +601,7 @@ paths:
           description: ''
   /api/v1/tasks/tasks/:
     get:
-      operationId: api_v1_tasks_tasks_list
+      operationId: tasks_tasks_list
       summary: 获取任务列表
       parameters:
       - name: page
@@ -593,7 +622,7 @@ paths:
                 $ref: '#/components/schemas/PaginatedTaskListResponseList'
           description: ''
     post:
-      operationId: api_v1_tasks_tasks_create
+      operationId: tasks_tasks_create
       summary: 创建任务
       tags:
       - Tasks
@@ -643,7 +672,7 @@ paths:
           description: ''
   /api/v1/tasks/tasks/{id}/:
     get:
-      operationId: api_v1_tasks_tasks_retrieve
+      operationId: tasks_tasks_retrieve
       summary: 获取单个任务
       parameters:
       - in: path
@@ -664,7 +693,7 @@ paths:
                 $ref: '#/components/schemas/TaskRetrieveResponse'
           description: ''
     put:
-      operationId: api_v1_tasks_tasks_update
+      operationId: tasks_tasks_update
       summary: 更新任务
       parameters:
       - in: path
@@ -697,7 +726,7 @@ paths:
                 $ref: '#/components/schemas/Task'
           description: ''
     patch:
-      operationId: api_v1_tasks_tasks_partial_update
+      operationId: tasks_tasks_partial_update
       summary: 部分更新任务
       parameters:
       - in: path
@@ -729,7 +758,7 @@ paths:
                 $ref: '#/components/schemas/Task'
           description: ''
     delete:
-      operationId: api_v1_tasks_tasks_destroy
+      operationId: tasks_tasks_destroy
       summary: 删除任务
       parameters:
       - in: path
@@ -747,7 +776,7 @@ paths:
           description: No response body
   /api/v1/tasks/tasks/{id}/complete/:
     post:
-      operationId: api_v1_tasks_tasks_complete_create
+      operationId: tasks_tasks_complete_create
       summary: 完成并结算任务
       parameters:
       - in: path
@@ -785,7 +814,7 @@ paths:
           description: ''
   /api/v1/tasks/tasks/history/:
     get:
-      operationId: api_v1_tasks_tasks_history_retrieve
+      operationId: tasks_tasks_history_retrieve
       summary: 获取任务历史记录
       tags:
       - Tasks
@@ -800,7 +829,7 @@ paths:
           description: ''
   /api/v1/tasks/tasks/today/:
     get:
-      operationId: api_v1_tasks_tasks_today_retrieve
+      operationId: tasks_tasks_today_retrieve
       summary: 获取指定日期任务实例
       parameters:
       - in: query
@@ -821,7 +850,7 @@ paths:
           description: ''
   /api/v1/users/auth/login/:
     post:
-      operationId: api_v1_users_auth_login_create
+      operationId: users_auth_login_create
       summary: 用户登录
       tags:
       - Users
@@ -867,7 +896,7 @@ paths:
           description: ''
   /api/v1/users/auth/refresh/:
     post:
-      operationId: api_v1_users_auth_refresh_create
+      operationId: users_auth_refresh_create
       description: |-
         Takes a refresh type JSON web token and returns an access type JSON web
         token if the refresh token is valid.
@@ -909,7 +938,7 @@ paths:
           description: ''
   /api/v1/users/auth/register/:
     post:
-      operationId: api_v1_users_auth_register_create
+      operationId: users_auth_register_create
       summary: 用户注册
       tags:
       - Users
@@ -981,7 +1010,7 @@ paths:
           description: ''
   /api/v1/users/me/:
     get:
-      operationId: api_v1_users_me_retrieve
+      operationId: users_me_retrieve
       summary: 获取当前用户资料
       tags:
       - Users
@@ -995,7 +1024,7 @@ paths:
                 $ref: '#/components/schemas/ProfileResponse'
           description: ''
     patch:
-      operationId: api_v1_users_me_partial_update
+      operationId: users_me_partial_update
       summary: 更新当前用户资料
       tags:
       - Users
@@ -1030,7 +1059,7 @@ paths:
           description: ''
   /api/v1/wallet/:
     get:
-      operationId: api_v1_wallet_retrieve
+      operationId: wallet_retrieve
       summary: 获取钱包余额
       tags:
       - Wallet
@@ -1045,7 +1074,7 @@ paths:
           description: ''
   /api/v1/wallet/transactions/:
     get:
-      operationId: api_v1_wallet_transactions_retrieve
+      operationId: wallet_transactions_retrieve
       summary: 获取钱包流水
       parameters:
       - in: query
@@ -1534,6 +1563,36 @@ components:
       - title
       - updated_at
       - version
+    LegalDocumentsPayload:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalDocument'
+        description:
+          type: array
+          items:
+            type: string
+      required:
+      - description
+      - documents
+    LegalDocumentsResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/LegalDocumentsPayload'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     Login:
       type: object
       properties:
@@ -1642,29 +1701,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GachaRecordListResponse'
-    PaginatedLegalDocumentList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/LegalDocument'
     PaginatedRedemptionRecordListResponseList:
       type: object
       required:
