@@ -1,4 +1,5 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from django.db import transaction
+from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -14,11 +15,13 @@ from apps.gacha.services import draw_once
     list=extend_schema(
         tags=["Gacha"],
         summary="获取卡池列表",
+        description="返回当前可用的抽卡池列表。前端通常在抽卡首页进入时调用。",
         responses=api_envelope_serializer("GachaPoolListResponse", GachaPoolSerializer(many=True)),
     ),
     retrieve=extend_schema(
         tags=["Gacha"],
         summary="获取单个卡池",
+        description="返回指定卡池的完整配置，包括消耗、概率和保底参数。",
         responses=api_envelope_serializer("GachaPoolDetailResponse", GachaPoolSerializer()),
     ),
 )
@@ -29,33 +32,37 @@ class GachaPoolViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         tags=["Gacha"],
-        summary="执行一次抽卡",
-        responses=api_envelope_serializer("GachaDrawResponse", GachaDrawRecordSerializer()),
+        summary="执行抽卡",
+        description=(
+            "执行单抽或多抽。当前支持一次请求抽 1 到 10 次，"
+            "后端会在事务中统一处理扣费、发奖和记录生成。"
+        ),
+        responses=api_envelope_serializer("GachaDrawResponse", GachaDrawRecordSerializer(many=True)),
+        examples=[
+            OpenApiExample("单抽请求", value={"times": 1}, request_only=True),
+            OpenApiExample("十连请求", value={"times": 10}, request_only=True),
+        ],
     )
     @action(detail=True, methods=["post"], url_path="draw")
     def draw(self, request, pk=None):
-        # 获取前端传来的抽卡次数，默认为1
         times = int(request.data.get("times", 1))
         pool = self.get_object()
-        
-        # 限制单次最大抽卡次数，防止恶意请求
-        if times < 1 or times > 10:
-            return api_response(code=400, message="抽卡次数不合法，仅支持1-10次")
 
-        records =[]
+        if times < 1 or times > 10:
+            return api_response(code=400, message="抽卡次数不合法，仅支持 1-10 次。", status_code=400)
+
+        records = []
         try:
-            # 开启事务，保证多次抽卡要么全成功，要么全失败（例如中途余额不足）
             with transaction.atomic():
                 for _ in range(times):
                     record = draw_once(user=request.user, pool=pool)
                     records.append(record)
-        except Exception as e:
-            # 捕获 wallet.services 里抛出的余额不足等异常
-            return api_response(code=400, message=str(e))
+        except Exception as exc:
+            return api_response(code=400, message=str(exc), status_code=400)
 
         return api_response(
-            data=GachaDrawRecordSerializer(records, many=True).data, 
-            message=f"成功抽卡 {times} 次"
+            data=GachaDrawRecordSerializer(records, many=True).data,
+            message=f"成功抽卡 {times} 次",
         )
 
 
@@ -63,11 +70,13 @@ class GachaPoolViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
     list=extend_schema(
         tags=["Gacha"],
         summary="获取抽卡记录",
+        description="返回当前用户的抽卡历史记录，适合抽卡记录页和资产回顾页使用。",
         responses=api_envelope_serializer("GachaRecordListResponse", GachaDrawRecordSerializer(many=True)),
     ),
     retrieve=extend_schema(
         tags=["Gacha"],
         summary="获取单条抽卡记录",
+        description="返回一条具体的抽卡结果记录。",
         responses=api_envelope_serializer("GachaRecordDetailResponse", GachaDrawRecordSerializer()),
     ),
 )

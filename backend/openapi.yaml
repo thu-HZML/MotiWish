@@ -7,6 +7,7 @@ paths:
   /api/v1/ai/report-jobs/:
     get:
       operationId: ai_report_jobs_list
+      description: 返回当前用户创建的 AI 报告任务列表，适合 AI 页或历史报告页使用。
       summary: 获取 AI 报告任务列表
       parameters:
       - name: page
@@ -28,6 +29,7 @@ paths:
           description: ''
     post:
       operationId: ai_report_jobs_create
+      description: 创建一条 AI 报告生成任务，用于后续异步分析、总结或推荐。
       summary: 创建 AI 报告任务
       tags:
       - AI
@@ -36,6 +38,15 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AIReportJob'
+            examples:
+              创建周报任务:
+                value:
+                  report_type: weekly
+                  summary: 生成本周任务完成情况与建议
+                  status: pending
+                  input_payload:
+                    range: 2026-W18
+                  result_payload: {}
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/AIReportJob'
@@ -55,6 +66,7 @@ paths:
   /api/v1/ai/report-jobs/{id}/:
     get:
       operationId: ai_report_jobs_retrieve
+      description: 返回一条具体的 AI 报告任务详情，包括输入、状态和结果。
       summary: 获取单个 AI 报告任务
       parameters:
       - in: path
@@ -76,6 +88,7 @@ paths:
           description: ''
     put:
       operationId: ai_report_jobs_update
+      description: 全量更新 AI 报告任务。
       summary: 更新 AI 报告任务
       parameters:
       - in: path
@@ -109,6 +122,7 @@ paths:
           description: ''
     patch:
       operationId: ai_report_jobs_partial_update
+      description: 部分更新 AI 报告任务，例如回填状态或结果摘要。
       summary: 部分更新 AI 报告任务
       parameters:
       - in: path
@@ -141,6 +155,7 @@ paths:
           description: ''
     delete:
       operationId: ai_report_jobs_destroy
+      description: 删除一条 AI 报告任务记录。
       summary: 删除 AI 报告任务
       parameters:
       - in: path
@@ -235,6 +250,7 @@ paths:
   /api/v1/gacha/pools/:
     get:
       operationId: gacha_pools_list
+      description: 返回当前可用的抽卡池列表。前端通常在抽卡首页进入时调用。
       summary: 获取卡池列表
       parameters:
       - name: page
@@ -257,6 +273,7 @@ paths:
   /api/v1/gacha/pools/{id}/:
     get:
       operationId: gacha_pools_retrieve
+      description: 返回指定卡池的完整配置，包括消耗、概率和保底参数。
       summary: 获取单个卡池
       parameters:
       - in: path
@@ -279,7 +296,8 @@ paths:
   /api/v1/gacha/pools/{id}/draw/:
     post:
       operationId: gacha_pools_draw_create
-      summary: 执行一次抽卡
+      description: 执行单抽或多抽。当前支持一次请求抽 1 到 10 次，后端会在事务中统一处理扣费、发奖和记录生成。
+      summary: 执行抽卡
       parameters:
       - in: path
         name: id
@@ -294,6 +312,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/GachaPool'
+            examples:
+              单抽请求:
+                value:
+                  times: 1
+              十连请求:
+                value:
+                  times: 10
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/GachaPool'
@@ -313,6 +338,7 @@ paths:
   /api/v1/gacha/records/:
     get:
       operationId: gacha_records_list
+      description: 返回当前用户的抽卡历史记录，适合抽卡记录页和资产回顾页使用。
       summary: 获取抽卡记录
       parameters:
       - name: page
@@ -335,6 +361,7 @@ paths:
   /api/v1/gacha/records/{id}/:
     get:
       operationId: gacha_records_retrieve
+      description: 返回一条具体的抽卡结果记录。
       summary: 获取单条抽卡记录
       parameters:
       - in: path
@@ -357,6 +384,7 @@ paths:
   /api/v1/reports/dashboard/:
     get:
       operationId: reports_dashboard_retrieve
+      description: 返回首页仪表盘所需的轻量统计数据，包括钱包余额和任务完成概览。适合首页、个人中心首页卡片使用。
       summary: 获取仪表盘报表
       tags:
       - Reports
@@ -368,10 +396,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardReportResponse'
+              examples:
+                仪表盘报表示例:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取报表成功
+                    data:
+                      wallet:
+                        primary_balance: 120
+                        secondary_balance: 36
+                      task_stats:
+                        total: 58
+                        completed: 41
           description: ''
   /api/v1/shop/items/:
     get:
       operationId: shop_items_list
+      description: 返回当前用户创建的愿望商品列表，适合商城首页、愿望管理页使用。
       summary: 获取愿望商品列表
       parameters:
       - name: page
@@ -393,6 +435,7 @@ paths:
           description: ''
     post:
       operationId: shop_items_create
+      description: 创建一个可兑换的愿望商品或奖励项。
       summary: 创建愿望商品
       tags:
       - Shop
@@ -401,6 +444,17 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/WishItem'
+            examples:
+              创建愿望商品:
+                value:
+                  title: 周末看一场电影
+                  description: 完成阶段目标后的放松奖励
+                  source: manual
+                  cost_secondary: 120
+                  inventory: 1
+                  is_enabled: true
+                  ai_pricing:
+                    source: manual
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/WishItem'
@@ -420,6 +474,7 @@ paths:
   /api/v1/shop/items/{id}/:
     get:
       operationId: shop_items_retrieve
+      description: 返回一条愿望商品的详细配置。
       summary: 获取单个愿望商品
       parameters:
       - in: path
@@ -441,6 +496,7 @@ paths:
           description: ''
     put:
       operationId: shop_items_update
+      description: 全量更新愿望商品配置。
       summary: 更新愿望商品
       parameters:
       - in: path
@@ -474,6 +530,7 @@ paths:
           description: ''
     patch:
       operationId: shop_items_partial_update
+      description: 部分更新愿望商品，例如调整库存、价格或上下架状态。
       summary: 部分更新愿望商品
       parameters:
       - in: path
@@ -506,6 +563,7 @@ paths:
           description: ''
     delete:
       operationId: shop_items_destroy
+      description: 删除愿望商品及其后续可见性。
       summary: 删除愿望商品
       parameters:
       - in: path
@@ -524,6 +582,7 @@ paths:
   /api/v1/shop/items/{id}/redeem/:
     post:
       operationId: shop_items_redeem_create
+      description: 消耗二级货币兑换指定愿望商品，并生成兑换记录。
       summary: 兑换愿望商品
       parameters:
       - in: path
@@ -558,6 +617,7 @@ paths:
   /api/v1/shop/redemptions/:
     get:
       operationId: shop_redemptions_list
+      description: 返回当前用户的兑换历史，可用于商城历史页和奖励兑现跟踪页。
       summary: 获取兑换记录
       parameters:
       - name: page
@@ -580,6 +640,7 @@ paths:
   /api/v1/shop/redemptions/{id}/:
     get:
       operationId: shop_redemptions_retrieve
+      description: 返回一条具体的兑换记录明细。
       summary: 获取单条兑换记录
       parameters:
       - in: path
@@ -908,6 +969,8 @@ paths:
   /api/v1/users/auth/login/:
     post:
       operationId: users_auth_login_create
+      description: 返回 access token、refresh token 和当前用户资料。后续受保护接口都需要在 Authorization
+        头中带 Bearer access_token。
       summary: 用户登录
       tags:
       - Users
@@ -937,26 +1000,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
-              examples:
-                登录成功响应:
-                  value:
-                    success: true
-                    code: OK
-                    message: 登录成功
-                    data:
-                      access: eyJhbGciOiJIUzI1NiIs...
-                      refresh: eyJhbGciOiJIUzI1NiIs...
-                      user:
-                        id: 1
-                        username: alice
-                        display_nickname: 爱丽丝
           description: ''
   /api/v1/users/auth/refresh/:
     post:
       operationId: users_auth_refresh_create
-      description: |-
-        Takes a refresh type JSON web token and returns an access type JSON web
-        token if the refresh token is valid.
+      description: 使用 refresh token 获取新的 access token。适合前端在 access token 过期后静默续期。
       summary: 刷新 JWT
       tags:
       - Users
@@ -984,18 +1032,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenRefresh'
-              examples:
-                刷新令牌响应:
-                  value:
-                    success: true
-                    code: OK
-                    message: 刷新令牌成功
-                    data:
-                      access: eyJhbGciOiJIUzI1NiIs...
           description: ''
   /api/v1/users/auth/register/:
     post:
       operationId: users_auth_register_create
+      description: 注册完成后会直接返回 JWT 令牌和用户基础资料。前端通常应在注册成功后立即进入基础资料完善流程。
       summary: 用户注册
       tags:
       - Users
@@ -1005,7 +1046,12 @@ paths:
             schema:
               $ref: '#/components/schemas/Register'
             examples:
-              注册请求:
+              最小注册请求:
+                value:
+                  username: alice
+                  email: alice@example.com
+                  password: Password123
+              带基础画像的注册请求:
                 value:
                   username: alice
                   email: alice@example.com
@@ -1013,8 +1059,16 @@ paths:
                   nickname: 爱丽丝
                   gender: female
                   occupation: student
-                  bio: 今天也要认真完成任务
+                  education_stage: college
+                  language_preference: zh-hans
+                  bio: 把每天过成自己想要的样子
                   timezone: Asia/Shanghai
+                  long_term_goals:
+                  - learning
+                  - habit
+                  focus_areas:
+                  - exam
+                  - sleep
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/Register'
@@ -1031,44 +1085,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RegisterResponse'
-              examples:
-                注册成功响应:
-                  value:
-                    success: true
-                    code: OK
-                    message: 注册成功
-                    data:
-                      access: eyJhbGciOiJIUzI1NiIs...
-                      refresh: eyJhbGciOiJIUzI1NiIs...
-                      user:
-                        id: 1
-                        username: alice
-                        email: alice@example.com
-                        nickname: 爱丽丝
-                        display_nickname: 爱丽丝
-                        avatar: null
-                        avatar_url: null
-                        default_avatar_group: female-default-1
-                        gender: female
-                        birth_date: null
-                        occupation: student
-                        bio: 今天也要认真完成任务
-                        timezone: Asia/Shanghai
-                        onboarding_completed: false
-                        prompt_profile:
-                          nickname: 爱丽丝
-                          gender: female
-                          birth_date: null
-                          occupation: student
-                          bio: 今天也要认真完成任务
-                          timezone: Asia/Shanghai
-                          avatar_present: false
-                          default_avatar_group: female-default-1
           description: ''
   /api/v1/users/me/:
     get:
       operationId: users_me_retrieve
-      summary: 获取当前用户资料
+      description: 返回当前用户的基础信息层数据，以及基础资料完善状态。前端可根据 basic_profile_completed、basic_profile_completion_score、basic_profile_missing_fields
+        决定是否展示完善提醒。
+      summary: 获取当前用户基础资料
       tags:
       - Users
       security:
@@ -1082,29 +1105,51 @@ paths:
           description: ''
     patch:
       operationId: users_me_partial_update
-      summary: 更新当前用户资料
+      description: 用于注册后基础资料完善页面。基础层可允许跳过：若用户不想填写某个多选项，请传 ['unspecified'] 作为哑元值。
+      summary: 更新当前用户基础资料
       tags:
       - Users
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedProfileUpdate'
+              $ref: '#/components/schemas/PatchedBaseProfileUpdate'
             examples:
-              更新资料请求:
+              完整填写基础资料:
                 value:
                   nickname: 时间炼金师
                   gender: male
                   birth_date: '2003-09-10'
                   occupation: student
+                  education_stage: college
+                  language_preference: zh-hans
+                  region: 北京
                   bio: 把每一天炼成愿望的燃料
                   timezone: Asia/Shanghai
+                  long_term_goals:
+                  - learning
+                  - habit
+                  focus_areas:
+                  - exam
+                  - sleep
+              跳过部分多选项:
+                value:
+                  nickname: 时间炼金师
+                  gender: unknown
+                  occupation: undisclosed
+                  education_stage: undisclosed
+                  language_preference: zh-hans
+                  timezone: Asia/Shanghai
+                  long_term_goals:
+                  - unspecified
+                  focus_areas:
+                  - unspecified
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedProfileUpdate'
+              $ref: '#/components/schemas/PatchedBaseProfileUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedProfileUpdate'
+              $ref: '#/components/schemas/PatchedBaseProfileUpdate'
       security:
       - jwtAuth: []
       responses:
@@ -1114,9 +1159,244 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProfileUpdateResponse'
           description: ''
+  /api/v1/users/profile/dynamic/:
+    get:
+      operationId: users_profile_dynamic_retrieve
+      description: 返回动态状态层数据。该层允许长期为空，主要用于 AI 结合最近状态做轻量调节。
+      summary: 获取动态状态画像
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicProfileResponse'
+          description: ''
+    patch:
+      operationId: users_profile_dynamic_partial_update
+      description: 用于每周轻提示或用户主动更新最近状态。字段均可部分提交。
+      summary: 提交或更新动态状态画像
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDynamicProfile'
+            examples:
+              更新动态状态:
+                value:
+                  current_stage_tags:
+                  - exam
+                  - crunch
+                  stress_level: 4
+                  sleep_quality: medium
+                  mood_state: medium
+                  available_time_level: limited
+                  current_top_goal: 完成本周数据库课程项目
+                  current_main_blocker: 白天课程多，晚上容易分心
+                  weekly_time_budget_hours: 8
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDynamicProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDynamicProfile'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DynamicProfileUpdateResponse'
+          description: ''
+  /api/v1/users/profile/meta/:
+    get:
+      operationId: users_profile_meta_retrieve
+      description: 返回前端构建基础资料表单、稳定画像问卷、动态状态轻提示所需的全部元数据。推荐在应用启动或进入个人中心时拉取一次并缓存。
+      summary: 获取画像元信息
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileMetaResponse'
+              examples:
+                画像元信息响应片段:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取画像元信息成功
+                    data:
+                      basic:
+                        title: 基础信息层
+                        required_after_register: true
+                        allow_skip_with_sentinel: true
+                      stable:
+                        title: 稳定画像问卷
+                        interaction: questionnaire
+                      dynamic:
+                        title: 动态状态层
+                        interaction: light_prompt
+                      reminder_policy:
+                        basic: 基础信息未完善时可持续提醒。
+                        stable: 稳定画像未完成时建议低频提醒。
+                        dynamic: 动态状态默认每周轻提示一次。
+          description: ''
+  /api/v1/users/profile/prompts/:
+    get:
+      operationId: users_profile_prompts_retrieve
+      description: 用于前端决定是否展示基础资料提醒、稳定画像问卷入口或动态状态轻提示。推荐在用户登录后和首页进入时调用。
+      summary: 获取画像提醒状态
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePromptStatusResponse'
+              examples:
+                提醒状态响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取提醒状态成功
+                    data:
+                      basic:
+                        completed: false
+                        completion_score: 62
+                        missing_fields:
+                        - occupation
+                        - long_term_goals
+                        - focus_areas
+                        last_prompted_at: null
+                        should_prompt: true
+                      stable:
+                        completed: false
+                        completion_score: 30
+                        missing_fields:
+                        - motivation_preferences
+                        - chronotype
+                        last_prompted_at: '2026-04-27T20:00:00+08:00'
+                        next_prompt_at: '2026-04-30T20:00:00+08:00'
+                        should_prompt: false
+                      dynamic:
+                        has_meaningful_data: true
+                        last_prompted_at: '2026-04-22T10:00:00+08:00'
+                        next_prompt_at: '2026-04-29T10:00:00+08:00'
+                        should_prompt: true
+          description: ''
+  /api/v1/users/profile/prompts/ack/:
+    post:
+      operationId: users_profile_prompts_ack_create
+      description: 当前端实际展示了某一层的提醒后调用，用于更新后端的提醒节流时间。这个接口不会修改画像内容，只记录“提醒已经给用户看过”。
+      summary: 记录画像提醒已展示
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReminderAck'
+            examples:
+              记录稳定画像提醒已展示:
+                value:
+                  layer: stable
+              记录动态状态提醒已展示:
+                value:
+                  layer: dynamic
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReminderAck'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReminderAck'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfilePromptAckResponse'
+          description: ''
+  /api/v1/users/profile/stable/:
+    get:
+      operationId: users_profile_stable_retrieve
+      description: 返回稳定画像问卷当前填写结果，以及完成度、缺失字段和下一次建议提醒时间。
+      summary: 获取稳定画像问卷结果
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StableProfileResponse'
+          description: ''
+    patch:
+      operationId: users_profile_stable_partial_update
+      description: AI 悬浮球或问卷页提交稳定画像时调用。前端可分步保存，也可一次性提交全部答案。
+      summary: 提交或更新稳定画像问卷
+      tags:
+      - Users
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedStableProfile'
+            examples:
+              提交稳定画像问卷:
+                value:
+                  self_management_challenges:
+                  - procrastination
+                  - distraction
+                  motivation_preferences:
+                  - achievement
+                  - narrative
+                  reward_preference: instant
+                  penalty_tolerance: medium
+                  stress_sensitivity: high
+                  self_discipline_score: 6
+                  chronotype: night
+                  energy_peak_periods:
+                  - evening
+                  - late_night
+                  task_granularity_preference: small
+                  planning_style_preference: mixed
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedStableProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedStableProfile'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StableProfileUpdateResponse'
+          description: ''
   /api/v1/wallet/:
     get:
       operationId: wallet_retrieve
+      description: 返回当前用户钱包中的一级货币和二级货币余额。建议在首页、商城、抽卡页进入时调用。
       summary: 获取钱包余额
       tags:
       - Wallet
@@ -1128,23 +1408,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WalletDetailResponse'
+              examples:
+                钱包余额响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取钱包成功
+                    data:
+                      id: 1
+                      primary_balance: 120
+                      secondary_balance: 36
+                      created_at: '2026-04-29T12:00:00+08:00'
+                      updated_at: '2026-04-29T12:00:00+08:00'
           description: ''
   /api/v1/wallet/transactions/:
     get:
       operationId: wallet_transactions_retrieve
+      description: 返回当前用户最近的钱包变动记录，可按货币类型和变动原因筛选。适合用于资产明细页、任务结算回溯页、抽卡消耗记录页。
       summary: 获取钱包流水
       parameters:
       - in: query
         name: currency_type
         schema:
           type: string
-        description: primary / secondary
+        description: 货币类型筛选：primary=一级货币，secondary=二级货币。
       - in: query
         name: reason
         schema:
           type: string
-        description: task_reward / task_penalty / gacha_cost / gacha_reward / shop_redeem
-          / manual_adjust
+        description: 交易原因筛选：task_reward、task_penalty、gacha_cost、gacha_reward、shop_redeem、manual_adjust。
       tags:
       - Wallet
       security:
@@ -1155,6 +1447,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WalletTransactionListResponse'
+              examples:
+                钱包流水响应片段:
+                  value:
+                    success: true
+                    code: OK
+                    message: 获取钱包流水成功
+                    data:
+                    - id: 21
+                      currency_type: primary
+                      reason: task_reward
+                      delta: 15
+                      balance_before: 105
+                      balance_after: 120
+                      reference_type: task_occurrence
+                      reference_id: 88
+                      memo: 完成任务：背单词 30 分钟
+                      payload: {}
+                      created_at: '2026-04-29T11:15:00+08:00'
           description: ''
 components:
   schemas:
@@ -1259,6 +1569,30 @@ components:
         * `pending` - 待生成
         * `done` - 已完成
         * `failed` - 失败
+    AvailableTimeLevelEnum:
+      enum:
+      - limited
+      - normal
+      - ample
+      - undisclosed
+      type: string
+      description: |-
+        * `limited` - 很少
+        * `normal` - 一般
+        * `ample` - 充足
+        * `undisclosed` - 暂不填写
+    ChronotypeEnum:
+      enum:
+      - morning
+      - night
+      - flexible
+      - undisclosed
+      type: string
+      description: |-
+        * `morning` - 早型
+        * `night` - 晚型
+        * `flexible` - 不固定
+        * `undisclosed` - 暂不填写
     CurrencyTypeEnum:
       enum:
       - primary
@@ -1325,6 +1659,140 @@ components:
         * `privacy` - 隐私政策
         * `data_collection` - 个人信息收集清单
         * `children` - 未成年人说明
+    DynamicProfile:
+      type: object
+      properties:
+        current_stage_tags:
+          title: 当前阶段标签
+        stress_level:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 最近压力水平
+        sleep_quality:
+          allOf:
+          - $ref: '#/components/schemas/SleepQualityEnum'
+          title: 最近睡眠情况
+        mood_state:
+          allOf:
+          - $ref: '#/components/schemas/MoodStateEnum'
+          title: 最近情绪状态
+        available_time_level:
+          allOf:
+          - $ref: '#/components/schemas/AvailableTimeLevelEnum'
+          title: 最近可支配时间
+        current_top_goal:
+          type: string
+          title: 当前最重要目标
+          maxLength: 120
+        current_main_blocker:
+          type: string
+          title: 当前最大阻碍
+          maxLength: 255
+        weekly_time_budget_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 本周可投入时长
+        last_prompted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 动态状态上次提醒时间
+        next_prompt_at:
+          type: string
+          format: date-time
+          readOnly: true
+        should_prompt:
+          type: boolean
+          readOnly: true
+        has_meaningful_data:
+          type: boolean
+          readOnly: true
+      required:
+      - has_meaningful_data
+      - last_prompted_at
+      - next_prompt_at
+      - should_prompt
+    DynamicProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DynamicProfile'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    DynamicProfileUpdateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DynamicProfile'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    EducationStageEnum:
+      enum:
+      - middle_school
+      - high_school
+      - college
+      - graduate
+      - working
+      - other
+      - undisclosed
+      type: string
+      description: |-
+        * `middle_school` - 初中
+        * `high_school` - 高中
+        * `college` - 本科/大专
+        * `graduate` - 研究生
+        * `working` - 已工作
+        * `other` - 其他
+        * `undisclosed` - 暂不填写
+    FocusAreasEnum:
+      enum:
+      - exam
+      - language
+      - fitness
+      - sleep
+      - work
+      - reading
+      - writing
+      - social
+      - household
+      - mental
+      - unspecified
+      type: string
+      description: |-
+        * `exam` - 考试/升学
+        * `language` - 语言学习
+        * `fitness` - 运动健身
+        * `sleep` - 睡眠作息
+        * `work` - 工作项目
+        * `reading` - 阅读输入
+        * `writing` - 写作输出
+        * `social` - 社交经营
+        * `household` - 生活事务
+        * `mental` - 心理状态
+        * `unspecified` - 暂不填写
     GachaDrawRecord:
       type: object
       properties:
@@ -1390,7 +1858,9 @@ components:
       type: object
       properties:
         data:
-          $ref: '#/components/schemas/GachaDrawRecord'
+          type: array
+          items:
+            $ref: '#/components/schemas/GachaDrawRecord'
         success:
           type: boolean
         code:
@@ -1576,6 +2046,30 @@ components:
       - access
       - refresh
       - user
+    LanguagePreferenceEnum:
+      enum:
+      - zh-hans
+      - en
+      - bilingual
+      - other
+      - undisclosed
+      type: string
+      description: |-
+        * `zh-hans` - 简体中文
+        * `en` - English
+        * `bilingual` - 中英双语
+        * `other` - 其他
+        * `undisclosed` - 暂不填写
+    LayerEnum:
+      enum:
+      - basic
+      - stable
+      - dynamic
+      type: string
+      description: |-
+        * `basic` - basic
+        * `stable` - stable
+        * `dynamic` - dynamic
     LegalDocument:
       type: object
       properties:
@@ -1655,9 +2149,11 @@ components:
       properties:
         username:
           type: string
+          description: 用户名。
         password:
           type: string
           writeOnly: true
+          description: 登录密码。
       required:
       - password
       - username
@@ -1677,18 +2173,68 @@ components:
       - data
       - message
       - success
-    OccupationEnum:
+    LongTermGoalsEnum:
       enum:
-      - employee
-      - student
-      - teacher
-      - other
+      - learning
+      - health
+      - habit
+      - productivity
+      - career
+      - emotion
+      - life
+      - finance
+      - relationship
+      - creativity
+      - unspecified
       type: string
       description: |-
-        * `employee` - 上班族
+        * `learning` - 学习提升
+        * `health` - 健康管理
+        * `habit` - 习惯养成
+        * `productivity` - 效率提升
+        * `career` - 职业发展
+        * `emotion` - 情绪管理
+        * `life` - 生活整理
+        * `finance` - 财务规划
+        * `relationship` - 人际关系
+        * `creativity` - 创作表达
+        * `unspecified` - 暂不填写
+    MoodStateEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - undisclosed
+      type: string
+      description: |-
+        * `low` - 低/较差
+        * `medium` - 一般
+        * `high` - 高/较好
+        * `undisclosed` - 暂不填写
+    OccupationEnum:
+      enum:
+      - student
+      - employee
+      - teacher
+      - freelancer
+      - creator
+      - job_seeker
+      - homemaker
+      - retired
+      - other
+      - undisclosed
+      type: string
+      description: |-
         * `student` - 学生
+        * `employee` - 上班族
         * `teacher` - 教师
+        * `freelancer` - 自由职业
+        * `creator` - 创作者
+        * `job_seeker` - 求职中
+        * `homemaker` - 居家/照护者
+        * `retired` - 退休
         * `other` - 其他
+        * `undisclosed` - 暂不填写
     PaginatedAIReportJobListResponseList:
       type: object
       required:
@@ -1859,18 +2405,17 @@ components:
         owner:
           type: integer
           readOnly: true
-    PatchedProfileUpdate:
+    PatchedBaseProfileUpdate:
       type: object
       properties:
         nickname:
           type: string
-          title: 昵称
-          maxLength: 50
+          description: 昵称。为空时展示默认昵称。
         avatar:
           type: string
           format: uri
           nullable: true
-          title: 头像
+          description: 头像图片文件，可为空。
         gender:
           allOf:
           - $ref: '#/components/schemas/GenderEnum'
@@ -1879,19 +2424,160 @@ components:
           type: string
           format: date
           nullable: true
-          title: 生日
+          description: 生日，可为空。
         occupation:
           allOf:
           - $ref: '#/components/schemas/OccupationEnum'
           title: 职业
+        education_stage:
+          allOf:
+          - $ref: '#/components/schemas/EducationStageEnum'
+          title: 教育阶段
+        language_preference:
+          allOf:
+          - $ref: '#/components/schemas/LanguagePreferenceEnum'
+          title: 语言偏好
+        region:
+          type: string
+          description: 所在地区，可为空。
         bio:
           type: string
-          title: 个人签名
-          maxLength: 100
+          description: 个人签名，最长 100 字符。
         timezone:
           type: string
-          title: 时区
-          maxLength: 50
+          description: 时区，例如 Asia/Shanghai。
+        long_term_goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/LongTermGoalsEnum'
+          description: 长期目标类型，多选；如果跳过，请传 ["unspecified"]。
+        focus_areas:
+          type: array
+          items:
+            $ref: '#/components/schemas/FocusAreasEnum'
+          description: 当前主要关注领域，多选；如果跳过，请传 ["unspecified"]。
+    PatchedDynamicProfile:
+      type: object
+      properties:
+        current_stage_tags:
+          title: 当前阶段标签
+        stress_level:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 最近压力水平
+        sleep_quality:
+          allOf:
+          - $ref: '#/components/schemas/SleepQualityEnum'
+          title: 最近睡眠情况
+        mood_state:
+          allOf:
+          - $ref: '#/components/schemas/MoodStateEnum'
+          title: 最近情绪状态
+        available_time_level:
+          allOf:
+          - $ref: '#/components/schemas/AvailableTimeLevelEnum'
+          title: 最近可支配时间
+        current_top_goal:
+          type: string
+          title: 当前最重要目标
+          maxLength: 120
+        current_main_blocker:
+          type: string
+          title: 当前最大阻碍
+          maxLength: 255
+        weekly_time_budget_hours:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 本周可投入时长
+        last_prompted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 动态状态上次提醒时间
+        next_prompt_at:
+          type: string
+          format: date-time
+          readOnly: true
+        should_prompt:
+          type: boolean
+          readOnly: true
+        has_meaningful_data:
+          type: boolean
+          readOnly: true
+    PatchedStableProfile:
+      type: object
+      properties:
+        self_management_challenges:
+          title: 自我管理难点
+        motivation_preferences:
+          title: 动机来源偏好
+        reward_preference:
+          allOf:
+          - $ref: '#/components/schemas/RewardPreferenceEnum'
+          title: 奖励偏好
+        penalty_tolerance:
+          allOf:
+          - $ref: '#/components/schemas/PenaltyToleranceEnum'
+          title: 惩罚接受度
+        stress_sensitivity:
+          allOf:
+          - $ref: '#/components/schemas/StressSensitivityEnum'
+          title: 压力敏感度
+        self_discipline_score:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 自律自评分
+        chronotype:
+          allOf:
+          - $ref: '#/components/schemas/ChronotypeEnum'
+          title: 作息类型
+        energy_peak_periods:
+          title: 精力高峰时段
+        task_granularity_preference:
+          allOf:
+          - $ref: '#/components/schemas/TaskGranularityPreferenceEnum'
+          title: 偏好任务粒度
+        planning_style_preference:
+          allOf:
+          - $ref: '#/components/schemas/PlanningStylePreferenceEnum'
+          title: 计划风格偏好
+        is_completed:
+          type: boolean
+          readOnly: true
+          title: 稳定画像是否完成
+        completion_score:
+          type: integer
+          readOnly: true
+          title: 稳定画像完善度
+        missing_fields:
+          readOnly: true
+          title: 稳定画像待补充字段
+        last_prompted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 稳定画像上次提醒时间
+        next_prompt_at:
+          type: string
+          format: date-time
+          readOnly: true
+        questionnaire_completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 问卷完成时间
+        should_prompt:
+          type: boolean
+          readOnly: true
     PatchedTask:
       type: object
       properties:
@@ -2044,6 +2730,107 @@ components:
           type: integer
           readOnly: true
           title: 所属用户
+    PenaltyToleranceEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - undisclosed
+      type: string
+      description: |-
+        * `low` - 低
+        * `medium` - 中
+        * `high` - 高
+        * `undisclosed` - 暂不填写
+    PlanningStylePreferenceEnum:
+      enum:
+      - structured
+      - flexible
+      - mixed
+      - undisclosed
+      type: string
+      description: |-
+        * `structured` - 严格计划
+        * `flexible` - 弹性计划
+        * `mixed` - 两者结合
+        * `undisclosed` - 暂不填写
+    ProfileMeta:
+      type: object
+      properties:
+        basic:
+          description: 基础信息层元数据，前端可据此渲染注册后补全表单。
+        stable:
+          description: 稳定画像问卷元数据，前端可据此渲染问卷页面。
+        dynamic:
+          description: 动态状态元数据，前端可据此渲染轻提示表单。
+        reminder_policy:
+          description: 三层画像的提醒策略说明。
+      required:
+      - basic
+      - dynamic
+      - reminder_policy
+      - stable
+    ProfileMetaResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfileMeta'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ProfilePromptAckResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfilePromptStatus'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    ProfilePromptStatus:
+      type: object
+      properties:
+        basic:
+          description: 基础信息层当前的完善度和提醒状态。
+        stable:
+          description: 稳定画像层当前的问卷完成度和提醒状态。
+        dynamic:
+          description: 动态状态层当前的提示状态。
+      required:
+      - basic
+      - dynamic
+      - stable
+    ProfilePromptStatusResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/ProfilePromptStatus'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     ProfileResponse:
       type: object
       properties:
@@ -2208,6 +2995,7 @@ components:
         password:
           type: string
           writeOnly: true
+          description: 登录密码，至少 8 位。
           minLength: 8
         nickname:
           type: string
@@ -2217,15 +3005,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/GenderEnum'
           title: 性别
-        birth_date:
-          type: string
-          format: date
-          nullable: true
-          title: 生日
         occupation:
           allOf:
           - $ref: '#/components/schemas/OccupationEnum'
           title: 职业
+        education_stage:
+          allOf:
+          - $ref: '#/components/schemas/EducationStageEnum'
+          title: 教育阶段
+        language_preference:
+          allOf:
+          - $ref: '#/components/schemas/LanguagePreferenceEnum'
+          title: 语言偏好
         bio:
           type: string
           title: 个人签名
@@ -2234,6 +3025,10 @@ components:
           type: string
           title: 时区
           maxLength: 50
+        long_term_goals:
+          title: 长期目标类型
+        focus_areas:
+          title: 当前主要关注领域
       required:
       - email
       - password
@@ -2254,6 +3049,20 @@ components:
       - data
       - message
       - success
+    ReminderAck:
+      type: object
+      properties:
+        layer:
+          allOf:
+          - $ref: '#/components/schemas/LayerEnum'
+          description: |-
+            本次确认已展示的提醒层级：basic、stable 或 dynamic。
+
+            * `basic` - basic
+            * `stable` - stable
+            * `dynamic` - dynamic
+      required:
+      - layer
     ReportTypeEnum:
       enum:
       - daily
@@ -2262,6 +3071,30 @@ components:
       description: |-
         * `daily` - 日报
         * `monthly` - 月报
+    RewardPreferenceEnum:
+      enum:
+      - instant
+      - big_later
+      - balanced
+      - undisclosed
+      type: string
+      description: |-
+        * `instant` - 偏好即时奖励
+        * `big_later` - 偏好延迟大奖励
+        * `balanced` - 二者平衡
+        * `undisclosed` - 暂不填写
+    SleepQualityEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - undisclosed
+      type: string
+      description: |-
+        * `low` - 低/较差
+        * `medium` - 一般
+        * `high` - 高/较好
+        * `undisclosed` - 暂不填写
     SourceEnum:
       enum:
       - manual
@@ -2270,6 +3103,127 @@ components:
       description: |-
         * `manual` - 用户创建
         * `system` - 系统推荐
+    StableProfile:
+      type: object
+      properties:
+        self_management_challenges:
+          title: 自我管理难点
+        motivation_preferences:
+          title: 动机来源偏好
+        reward_preference:
+          allOf:
+          - $ref: '#/components/schemas/RewardPreferenceEnum'
+          title: 奖励偏好
+        penalty_tolerance:
+          allOf:
+          - $ref: '#/components/schemas/PenaltyToleranceEnum'
+          title: 惩罚接受度
+        stress_sensitivity:
+          allOf:
+          - $ref: '#/components/schemas/StressSensitivityEnum'
+          title: 压力敏感度
+        self_discipline_score:
+          type: integer
+          maximum: 32767
+          minimum: 0
+          nullable: true
+          title: 自律自评分
+        chronotype:
+          allOf:
+          - $ref: '#/components/schemas/ChronotypeEnum'
+          title: 作息类型
+        energy_peak_periods:
+          title: 精力高峰时段
+        task_granularity_preference:
+          allOf:
+          - $ref: '#/components/schemas/TaskGranularityPreferenceEnum'
+          title: 偏好任务粒度
+        planning_style_preference:
+          allOf:
+          - $ref: '#/components/schemas/PlanningStylePreferenceEnum'
+          title: 计划风格偏好
+        is_completed:
+          type: boolean
+          readOnly: true
+          title: 稳定画像是否完成
+        completion_score:
+          type: integer
+          readOnly: true
+          title: 稳定画像完善度
+        missing_fields:
+          readOnly: true
+          title: 稳定画像待补充字段
+        last_prompted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 稳定画像上次提醒时间
+        next_prompt_at:
+          type: string
+          format: date-time
+          readOnly: true
+        questionnaire_completed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 问卷完成时间
+        should_prompt:
+          type: boolean
+          readOnly: true
+      required:
+      - completion_score
+      - is_completed
+      - last_prompted_at
+      - missing_fields
+      - next_prompt_at
+      - questionnaire_completed_at
+      - should_prompt
+    StableProfileResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/StableProfile'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    StableProfileUpdateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/StableProfile'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    StressSensitivityEnum:
+      enum:
+      - low
+      - medium
+      - high
+      - undisclosed
+      type: string
+      description: |-
+        * `low` - 低
+        * `medium` - 中
+        * `high` - 高
+        * `undisclosed` - 暂不填写
     Task:
       type: object
       properties:
@@ -2426,6 +3380,18 @@ components:
       - data
       - message
       - success
+    TaskGranularityPreferenceEnum:
+      enum:
+      - small
+      - balanced
+      - large
+      - undisclosed
+      type: string
+      description: |-
+        * `small` - 喜欢拆小任务
+        * `balanced` - 大小任务都可以
+        * `large` - 偏好大块任务
+        * `undisclosed` - 暂不填写
     TaskHistoryResponse:
       type: object
       properties:
@@ -2640,6 +3606,18 @@ components:
           allOf:
           - $ref: '#/components/schemas/OccupationEnum'
           title: 职业
+        education_stage:
+          allOf:
+          - $ref: '#/components/schemas/EducationStageEnum'
+          title: 教育阶段
+        language_preference:
+          allOf:
+          - $ref: '#/components/schemas/LanguagePreferenceEnum'
+          title: 语言偏好
+        region:
+          type: string
+          title: 所在地区
+          maxLength: 80
         bio:
           type: string
           title: 个人签名
@@ -2648,17 +3626,44 @@ components:
           type: string
           title: 时区
           maxLength: 50
+        long_term_goals:
+          title: 长期目标类型
+        focus_areas:
+          title: 当前主要关注领域
         onboarding_completed:
           type: boolean
+          readOnly: true
           title: 是否完成引导
+        basic_profile_completed:
+          type: boolean
+          readOnly: true
+          title: 基础资料是否完善
+        basic_profile_completion_score:
+          type: integer
+          readOnly: true
+          title: 基础资料完善度
+        basic_profile_missing_fields:
+          readOnly: true
+          title: 基础资料待补充字段
+        basic_profile_last_prompted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 基础资料上次提醒时间
         prompt_profile:
           readOnly: true
       required:
       - avatar_url
+      - basic_profile_completed
+      - basic_profile_completion_score
+      - basic_profile_last_prompted_at
+      - basic_profile_missing_fields
       - default_avatar_group
       - display_nickname
       - email
       - id
+      - onboarding_completed
       - prompt_profile
       - username
     Wallet:
