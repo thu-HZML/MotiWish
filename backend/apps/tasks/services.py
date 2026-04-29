@@ -14,7 +14,10 @@ def _task_matches_date(task, target_date):
     if task.ends_on and target_date > task.ends_on:
         return False
     if task.task_type == TaskType.ONE_TIME:
-        return task.due_at.date() == target_date if task.due_at else True
+        available_from = task.starts_on or timezone.localdate(task.created_at)
+        if target_date < available_from:
+            return False
+        return target_date <= task.due_at.date() if task.due_at else True
     if task.task_type == TaskType.DAILY or task.recurrence == RecurrenceType.DAILY:
         return True
     if task.recurrence == RecurrenceType.WEEKLY:

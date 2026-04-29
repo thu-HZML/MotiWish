@@ -602,6 +602,7 @@ paths:
   /api/v1/tasks/tasks/:
     get:
       operationId: tasks_tasks_list
+      description: 返回当前登录用户创建的任务模板列表。这里返回的是任务定义，不是按日期展开后的任务实例。
       summary: 获取任务列表
       parameters:
       - name: page
@@ -623,6 +624,7 @@ paths:
           description: ''
     post:
       operationId: tasks_tasks_create
+      description: 创建一个任务模板。task_type 用于区分日常、周期和一次性任务；recurrence 用于描述周期规则。
       summary: 创建任务
       tags:
       - Tasks
@@ -632,7 +634,7 @@ paths:
             schema:
               $ref: '#/components/schemas/Task'
             examples:
-              创建周期任务:
+              创建每日学习任务:
                 value:
                   title: 背单词 30 分钟
                   description: 每天晚饭后完成
@@ -640,8 +642,8 @@ paths:
                   recurrence: daily
                   weekdays: []
                   month_days: []
-                  metric_key: ''
-                  target_value: null
+                  metric_key: study_minutes
+                  target_value: 30
                   progress_target: 100
                   reward_primary: 15
                   penalty_primary: 3
@@ -652,6 +654,53 @@ paths:
                   tags:
                   - study
                   - english
+                  ai_metadata:
+                    source: manual
+              创建每周健身任务:
+                value:
+                  title: 去健身房训练
+                  description: 固定在周一、周三、周六执行
+                  task_type: recurring
+                  recurrence: weekly
+                  weekdays:
+                  - 0
+                  - 2
+                  - 5
+                  month_days: []
+                  metric_key: ''
+                  target_value: null
+                  progress_target: 100
+                  reward_primary: 20
+                  penalty_primary: 5
+                  starts_on: '2026-05-01'
+                  ends_on: null
+                  due_at: null
+                  status: active
+                  tags:
+                  - health
+                  - sport
+                  ai_metadata:
+                    source: manual
+              创建一次性截止任务:
+                value:
+                  title: 提交课程大作业
+                  description: 在截止日前上传最终版本
+                  task_type: one_time
+                  recurrence: none
+                  weekdays: []
+                  month_days: []
+                  metric_key: ''
+                  target_value: null
+                  progress_target: 100
+                  reward_primary: 50
+                  penalty_primary: 0
+                  starts_on: '2026-05-01'
+                  ends_on: '2026-05-15'
+                  due_at: '2026-05-15T23:59:00+08:00'
+                  status: active
+                  tags:
+                  - school
+                  - deadline
                   ai_metadata:
                     source: manual
           application/x-www-form-urlencoded:
@@ -673,6 +722,7 @@ paths:
   /api/v1/tasks/tasks/{id}/:
     get:
       operationId: tasks_tasks_retrieve
+      description: 返回指定任务模板的完整字段。
       summary: 获取单个任务
       parameters:
       - in: path
@@ -694,6 +744,7 @@ paths:
           description: ''
     put:
       operationId: tasks_tasks_update
+      description: 全量更新任务模板。未提供的字段会被重置，因此更适合结构性修改。
       summary: 更新任务
       parameters:
       - in: path
@@ -727,6 +778,7 @@ paths:
           description: ''
     patch:
       operationId: tasks_tasks_partial_update
+      description: 部分更新任务模板，适合只修改奖励、时间、标签等少数字段。
       summary: 部分更新任务
       parameters:
       - in: path
@@ -759,6 +811,7 @@ paths:
           description: ''
     delete:
       operationId: tasks_tasks_destroy
+      description: 删除任务模板及其关联的任务实例记录。
       summary: 删除任务
       parameters:
       - in: path
@@ -777,6 +830,8 @@ paths:
   /api/v1/tasks/tasks/{id}/complete/:
     post:
       operationId: tasks_tasks_complete_create
+      description: 将指定任务在某一天的实例标记为 completed，并按 reward_primary 发放一级货币奖励。如果不传 progress，则自动使用任务的
+        progress_target。
       summary: 完成并结算任务
       parameters:
       - in: path
@@ -815,6 +870,7 @@ paths:
   /api/v1/tasks/tasks/history/:
     get:
       operationId: tasks_tasks_history_retrieve
+      description: 返回当前用户最近 100 条任务实例记录，可用于历史页、统计页或结算回溯。
       summary: 获取任务历史记录
       tags:
       - Tasks
@@ -830,13 +886,14 @@ paths:
   /api/v1/tasks/tasks/today/:
     get:
       operationId: tasks_tasks_today_retrieve
-      summary: 获取指定日期任务实例
+      description: 根据给定日期生成并返回当天应出现的任务实例。这里返回的是 TaskOccurrence，包含任务模板和当天的完成状态。
+      summary: 获取指定日期的任务实例
       parameters:
       - in: query
         name: date
         schema:
           type: string
-        description: 日期，格式 YYYY-MM-DD；不传则默认为今天
+        description: 目标日期，格式 YYYY-MM-DD；不传则默认今天。
       tags:
       - Tasks
       security:
@@ -1843,67 +1900,95 @@ components:
           readOnly: true
         title:
           type: string
-          title: 任务标题
+          description: 任务标题，建议用一句简短动作描述，例如“背单词 30 分钟”。
           maxLength: 120
         description:
           type: string
-          title: 任务描述
+          description: 任务详细说明，可为空。
         task_type:
           allOf:
           - $ref: '#/components/schemas/TaskTypeEnum'
-          title: 任务类型
+          description: |-
+            任务类型：daily=日常任务，recurring=周期任务，one_time=一次性任务。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
         recurrence:
-          $ref: '#/components/schemas/RecurrenceEnum'
+          allOf:
+          - $ref: '#/components/schemas/RecurrenceEnum'
+          description: |-
+            重复规则：none=不重复，daily=每天，weekly=每周，monthly=每月。daily 任务通常可保持 none。
+
+            * `none` - 不重复
+            * `daily` - 每天
+            * `weekly` - 每周
+            * `monthly` - 每月
         weekdays:
-          title: 周重复设置
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: 每周重复时生效，使用 Python weekday 编码：0=周一，1=周二，...，6=周日。
         month_days:
-          title: 月重复设置
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: 每月重复时生效，填写每月的第几天，例如 [1, 15, 28]。
         metric_key:
           type: string
-          title: 系统指标键
+          description: 可选的系统指标键，用于后续接入打卡统计、AI 分析或自动进度汇总。
           maxLength: 50
         target_value:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
           nullable: true
-          title: 目标值
+          description: 指标目标值，可与 metric_key 搭配使用，例如目标步数、目标时长。
         progress_target:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 进度目标
+          description: 任务完成时默认写入的进度值，complete 接口未传 progress 时会使用它。
         reward_primary:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 一级货币奖励
+          description: 完成任务后奖励的一级货币数量。
         penalty_primary:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 一级货币惩罚
+          description: 预留的惩罚金额。当前完成任务逻辑会发奖励，但尚未自动执行超时扣罚。
         starts_on:
           type: string
           format: date
           nullable: true
-          title: 开始日期
+          description: 任务生效开始日期，留空表示立即生效。
         ends_on:
           type: string
           format: date
           nullable: true
-          title: 结束日期
+          description: 任务生效结束日期，留空表示长期有效。
         due_at:
           type: string
           format: date-time
           nullable: true
-          title: 截止时间
+          description: 一次性任务的截止时间。当前系统会让 one_time 任务从生效日起到 due_at 当天每天都出现。
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          allOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          description: |-
+            任务状态：active=启用，archived=归档。归档任务不会再生成新的任务实例。
+
+            * `active` - 启用
+            * `archived` - 归档
         tags:
-          title: 标签
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          description: 可选标签列表，例如 ["study", "health"]。
         ai_metadata:
-          title: AI评估数据
+          description: AI 扩展元数据，预留给评分、推荐、标签推断等能力。
         created_at:
           type: string
           format: date-time
@@ -2193,67 +2278,95 @@ components:
           readOnly: true
         title:
           type: string
-          title: 任务标题
+          description: 任务标题，建议用一句简短动作描述，例如“背单词 30 分钟”。
           maxLength: 120
         description:
           type: string
-          title: 任务描述
+          description: 任务详细说明，可为空。
         task_type:
           allOf:
           - $ref: '#/components/schemas/TaskTypeEnum'
-          title: 任务类型
+          description: |-
+            任务类型：daily=日常任务，recurring=周期任务，one_time=一次性任务。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
         recurrence:
-          $ref: '#/components/schemas/RecurrenceEnum'
+          allOf:
+          - $ref: '#/components/schemas/RecurrenceEnum'
+          description: |-
+            重复规则：none=不重复，daily=每天，weekly=每周，monthly=每月。daily 任务通常可保持 none。
+
+            * `none` - 不重复
+            * `daily` - 每天
+            * `weekly` - 每周
+            * `monthly` - 每月
         weekdays:
-          title: 周重复设置
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: 每周重复时生效，使用 Python weekday 编码：0=周一，1=周二，...，6=周日。
         month_days:
-          title: 月重复设置
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: 每月重复时生效，填写每月的第几天，例如 [1, 15, 28]。
         metric_key:
           type: string
-          title: 系统指标键
+          description: 可选的系统指标键，用于后续接入打卡统计、AI 分析或自动进度汇总。
           maxLength: 50
         target_value:
           type: integer
-          maximum: 2147483647
-          minimum: -2147483648
           nullable: true
-          title: 目标值
+          description: 指标目标值，可与 metric_key 搭配使用，例如目标步数、目标时长。
         progress_target:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 进度目标
+          description: 任务完成时默认写入的进度值，complete 接口未传 progress 时会使用它。
         reward_primary:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 一级货币奖励
+          description: 完成任务后奖励的一级货币数量。
         penalty_primary:
           type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 一级货币惩罚
+          description: 预留的惩罚金额。当前完成任务逻辑会发奖励，但尚未自动执行超时扣罚。
         starts_on:
           type: string
           format: date
           nullable: true
-          title: 开始日期
+          description: 任务生效开始日期，留空表示立即生效。
         ends_on:
           type: string
           format: date
           nullable: true
-          title: 结束日期
+          description: 任务生效结束日期，留空表示长期有效。
         due_at:
           type: string
           format: date-time
           nullable: true
-          title: 截止时间
+          description: 一次性任务的截止时间。当前系统会让 one_time 任务从生效日起到 due_at 当天每天都出现。
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          allOf:
+          - $ref: '#/components/schemas/TaskStatusEnum'
+          description: |-
+            任务状态：active=启用，archived=归档。归档任务不会再生成新的任务实例。
+
+            * `active` - 启用
+            * `archived` - 归档
         tags:
-          title: 标签
+          type: array
+          items:
+            type: string
+            maxLength: 50
+          description: 可选标签列表，例如 ["study", "health"]。
         ai_metadata:
-          title: AI评估数据
+          description: AI 扩展元数据，预留给评分、推荐、标签推断等能力。
         created_at:
           type: string
           format: date-time
@@ -2276,9 +2389,11 @@ components:
         occurrence_date:
           type: string
           format: date
+          description: 要结算的任务实例日期，默认是今天。
         progress:
           type: integer
           minimum: 0
+          description: 本次完成时写入的进度值；不传则自动使用任务的 progress_target。
     TaskCompleteResponse:
       type: object
       properties:
