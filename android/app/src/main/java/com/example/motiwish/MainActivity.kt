@@ -29,6 +29,8 @@ import java.util.concurrent.TimeUnit
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 
+import androidx.navigation.compose.currentBackStackEntryAsState
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -52,12 +54,17 @@ class MainActivity : ComponentActivity() {
             MySelfManagementAppTheme {
                 val navController = rememberNavController()
 
+                // 获取当前路由的状态，用来判断是否在 splash 页面
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
                         bottomBar = {
+                            if (currentRoute != "splash") {
                             NavigationBar(
                                 containerColor = Color.White,
                                 tonalElevation = 0.dp
@@ -69,29 +76,41 @@ class MainActivity : ComponentActivity() {
                                     "currency" to "货币",
                                     "history" to "历史"
                                 )
-                                val currentRoute = navController.currentBackStackEntry?.destination?.route
+                                val currentRoute =
+                                    navController.currentBackStackEntry?.destination?.route
                                 items.forEach { (route, label) ->
                                     NavigationBarItem(
                                         selected = currentRoute == route,
-                                        onClick = { navController.navigate(route) {
-                                            popUpTo(navController.graph.startDestinationId) {
-                                                saveState = true
+                                        onClick = {
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.startDestinationId) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
                                             }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        } },
-                                        icon = { Icon(Icons.Default.Circle, contentDescription = null) },
+                                        },
+                                        icon = {
+                                            Icon(
+                                                Icons.Default.Circle,
+                                                contentDescription = null
+                                            )
+                                        },
                                         label = { Text(label) }
                                     )
                                 }
+                            }
                             }
                         }
                     ) { innerPadding ->
                         NavHost(
                             navController = navController,
-                            startDestination = "tasks",
+                            startDestination = "splash",
                             modifier = Modifier.padding(innerPadding)
                         ) {
+                            composable("splash") {
+                                SplashScreen(navController)
+                            }
                             composable("tasks") {
                                 val viewModel = TaskViewModel(taskRepository, currencyRepository)
                                 TaskScreen(viewModel, navController)
