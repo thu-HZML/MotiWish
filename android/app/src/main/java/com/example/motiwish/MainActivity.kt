@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -19,9 +18,6 @@ import com.example.motiwish.data.repository.*
 import com.example.motiwish.ui.screens.*
 import com.example.motiwish.ui.theme.MySelfManagementAppTheme
 import com.example.motiwish.viewmodel.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.work.*
 import java.util.concurrent.TimeUnit
 
@@ -73,8 +69,9 @@ class MainActivity : ComponentActivity() {
                                     "tasks" to "任务",
                                     "gacha" to "抽卡",
                                     "shop" to "商店",
-                                    "currency" to "货币",
-                                    "history" to "历史"
+                                    "profile" to "我的"
+                                    //"currency" to "货币",
+                                    //"history" to "历史"
                                 )
                                 val currentRoute =
                                     navController.currentBackStackEntry?.destination?.route
@@ -123,6 +120,13 @@ class MainActivity : ComponentActivity() {
                                 val viewModel = ShopViewModel(wishRepository, currencyRepository)
                                 ShopScreen(viewModel, navController)
                             }
+
+                            composable("profile") {
+                                val currencyViewModel = CurrencyViewModel(currencyRepository)
+                                val historyViewModel = HistoryViewModel(taskRepository, currencyRepository)
+                                ProfileScreen(navController, currencyViewModel, historyViewModel)
+                            }
+
                             composable("currency") {
                                 val viewModel = CurrencyViewModel(currencyRepository)
                                 CurrencyScreen(viewModel)
