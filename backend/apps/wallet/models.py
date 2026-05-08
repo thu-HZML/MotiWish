@@ -14,6 +14,7 @@ class TransactionReason(models.TextChoices):
     GACHA_COST = "gacha_cost", "抽卡消耗"
     GACHA_REWARD = "gacha_reward", "抽卡奖励"
     SHOP_REDEEM = "shop_redeem", "商店兑换"
+    SHOP_REFUND = "shop_refund", "商店退款"
     MANUAL_ADJUST = "manual_adjust", "后台调整"
     DEBT_RESET = "debt_reset", "债务重置"
 

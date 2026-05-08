@@ -1,8 +1,20 @@
 from django.db import transaction
+from django.utils import timezone
 
-from apps.shop.models import RedemptionRecord, WishItem
+from apps.shop.models import RedemptionRecord, RedemptionStatus, WishItem, WishPriceTier
 from apps.wallet.models import CurrencyType, TransactionReason
 from apps.wallet.services import change_balance
+
+PRICE_BOUNDS = {
+    WishPriceTier.SMALL: {"min": 30, "max": 120},
+    WishPriceTier.MEDIUM: {"min": 100, "max": 350},
+    WishPriceTier.LARGE: {"min": 300, "max": 1200},
+}
+
+
+def clamp_price_by_tier(*, price_tier, suggested_price):
+    bounds = PRICE_BOUNDS[price_tier]
+    return max(bounds["min"], min(bounds["max"], suggested_price))
 
 
 @transaction.atomic
@@ -30,3 +42,48 @@ def redeem_item(*, user, item):
         cost_secondary=item.price_secondary,
         transaction=transaction_record,
     )
+
+
+@transaction.atomic
+def fulfill_redemption(*, record, note=""):
+    record = RedemptionRecord.objects.select_for_update().select_related("item").get(pk=record.pk)
+    if record.status != RedemptionStatus.REQUESTED:
+        raise ValueError("只有待处理的兑换记录才能兑现")
+    record.status = RedemptionStatus.FULFILLED
+    record.fulfilled_at = timezone.now()
+    if note:
+        record.note = note
+    record.save(update_fields=["status", "fulfilled_at", "note", "updated_at"])
+    return record
+
+
+@transaction.atomic
+def reject_redemption(*, record, note="", refund=None):
+    record = RedemptionRecord.objects.select_for_update().select_related("item").get(pk=record.pk)
+    if record.status != RedemptionStatus.REQUESTED:
+        raise ValueError("只有待处理的兑换记录才能拒绝")
+
+    should_refund = record.item.auto_refund_on_reject if refund is None else refund
+    refund_transaction = None
+
+    if should_refund:
+        _, refund_transaction = change_balance(
+            user=record.owner,
+            currency_type=CurrencyType.SECONDARY,
+            delta=record.cost_secondary,
+            reason=TransactionReason.SHOP_REFUND,
+            reference_type="redemption_record",
+            reference_id=record.id,
+            memo=f"兑换被拒退款：{record.item.title}",
+        )
+        if record.item.inventory is not None:
+            record.item.inventory += 1
+            record.item.save(update_fields=["inventory", "updated_at"])
+
+    record.status = RedemptionStatus.REJECTED
+    record.rejected_at = timezone.now()
+    record.refund_transaction = refund_transaction
+    if note:
+        record.note = note
+    record.save(update_fields=["status", "rejected_at", "refund_transaction", "note", "updated_at"])
+    return record

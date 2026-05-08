@@ -458,7 +458,7 @@ paths:
           description: ''
     post:
       operationId: shop_items_create
-      description: 创建一个可兑换的愿望商品或奖励项。
+      description: 创建一个可兑换的愿望商品。价格需要符合当前档位的边界约束。
       summary: 创建愿望商品
       tags:
       - Shop
@@ -468,14 +468,16 @@ paths:
             schema:
               $ref: '#/components/schemas/WishItem'
             examples:
-              创建愿望商品:
+              创建中愿望商品:
                 value:
                   title: 周末看一场电影
                   description: 完成阶段目标后的放松奖励
                   source: manual
-                  cost_secondary: 120
+                  price_tier: medium
+                  price_secondary: 180
                   inventory: 1
                   is_enabled: true
+                  auto_refund_on_reject: true
                   ai_pricing:
                     source: manual
           application/x-www-form-urlencoded:
@@ -497,7 +499,6 @@ paths:
   /api/v1/shop/items/{id}/:
     get:
       operationId: shop_items_retrieve
-      description: 返回一条愿望商品的详细配置。
       summary: 获取单个愿望商品
       parameters:
       - in: path
@@ -519,7 +520,6 @@ paths:
           description: ''
     put:
       operationId: shop_items_update
-      description: 全量更新愿望商品配置。
       summary: 更新愿望商品
       parameters:
       - in: path
@@ -553,7 +553,6 @@ paths:
           description: ''
     patch:
       operationId: shop_items_partial_update
-      description: 部分更新愿望商品，例如调整库存、价格或上下架状态。
       summary: 部分更新愿望商品
       parameters:
       - in: path
@@ -586,7 +585,6 @@ paths:
           description: ''
     delete:
       operationId: shop_items_destroy
-      description: 删除愿望商品及其后续可见性。
       summary: 删除愿望商品
       parameters:
       - in: path
@@ -637,10 +635,59 @@ paths:
               schema:
                 $ref: '#/components/schemas/WishItemRedeemResponse'
           description: ''
+  /api/v1/shop/items/pricing/meta/:
+    get:
+      operationId: shop_items_pricing_meta_retrieve
+      description: 返回前端构建愿望定价表单和 AI 定价边界所需的价格档位信息。
+      summary: 获取愿望定价元信息
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishPricingMetaResponse'
+          description: ''
+  /api/v1/shop/items/pricing/preview/:
+    post:
+      operationId: shop_items_pricing_preview_create
+      description: 在真正应用 AI 定价前，先让后端根据价格档位返回裁剪后的合法价格。
+      summary: 预览愿望定价边界裁剪
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WishPricingPreview'
+            examples:
+              大愿望价格预览:
+                value:
+                  price_tier: large
+                  suggested_price: 1600
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WishPricingPreview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WishPricingPreview'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WishPricingPreviewResponse'
+          description: ''
   /api/v1/shop/redemptions/:
     get:
       operationId: shop_redemptions_list
-      description: 返回当前用户的兑换历史，可用于商城历史页和奖励兑现跟踪页。
+      description: 返回当前用户的兑换历史。
       summary: 获取兑换记录
       parameters:
       - name: page
@@ -663,7 +710,6 @@ paths:
   /api/v1/shop/redemptions/{id}/:
     get:
       operationId: shop_redemptions_retrieve
-      description: 返回一条具体的兑换记录明细。
       summary: 获取单条兑换记录
       parameters:
       - in: path
@@ -682,6 +728,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RedemptionRecordDetailResponse'
+          description: ''
+  /api/v1/shop/redemptions/{id}/fulfill/:
+    post:
+      operationId: shop_redemptions_fulfill_create
+      description: 将待处理兑换记录标记为已兑现。
+      summary: 兑现兑换记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 兑换记录.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedemptionFulfillResponse'
+          description: ''
+  /api/v1/shop/redemptions/{id}/reject/:
+    post:
+      operationId: shop_redemptions_reject_create
+      description: 将待处理兑换记录标记为已拒绝。默认根据商品设置自动退款。
+      summary: 拒绝兑换记录
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 兑换记录.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+            examples:
+              拒绝并自动退款:
+                value:
+                  note: 当前不满足兑现条件
+                  refund: true
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RedemptionAction'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedemptionRejectResponse'
           description: ''
   /api/v1/tasks/tasks/:
     get:
@@ -2892,6 +3011,10 @@ components:
           title: 愿望描述
         source:
           $ref: '#/components/schemas/SourceEnum'
+        price_tier:
+          allOf:
+          - $ref: '#/components/schemas/PriceTierEnum'
+          title: 价格档位
         price_secondary:
           type: integer
           maximum: 2147483647
@@ -2906,8 +3029,11 @@ components:
         is_enabled:
           type: boolean
           title: 是否上架
+        auto_refund_on_reject:
+          type: boolean
+          title: 拒绝时自动退款
         ai_pricing:
-          title: AI定价数据
+          title: AI 定价数据
         owner:
           type: integer
           readOnly: true
@@ -2947,6 +3073,16 @@ components:
         * `flexible` - 弹性计划
         * `mixed` - 两者结合
         * `undisclosed` - 暂不填写
+    PriceTierEnum:
+      enum:
+      - small
+      - medium
+      - large
+      type: string
+      description: |-
+        * `small` - 小愿望
+        * `medium` - 中愿望
+        * `large` - 大愿望
     PricingStatusEnum:
       enum:
       - unpriced
@@ -3075,6 +3211,7 @@ components:
       - gacha_cost
       - gacha_reward
       - shop_redeem
+      - shop_refund
       - manual_adjust
       - debt_reset
       type: string
@@ -3084,6 +3221,7 @@ components:
         * `gacha_cost` - 抽卡消耗
         * `gacha_reward` - 抽卡奖励
         * `shop_redeem` - 商店兑换
+        * `shop_refund` - 商店退款
         * `manual_adjust` - 后台调整
         * `debt_reset` - 债务重置
     RecurrenceEnum:
@@ -3098,6 +3236,30 @@ components:
         * `daily` - 每天
         * `weekly` - 每周
         * `monthly` - 每月
+    RedemptionAction:
+      type: object
+      properties:
+        note:
+          type: string
+          maxLength: 255
+        refund:
+          type: boolean
+    RedemptionFulfillResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     RedemptionRecord:
       type: object
       properties:
@@ -3129,9 +3291,22 @@ components:
           type: string
           title: 备注
           maxLength: 255
+        fulfilled_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 兑现时间
+        rejected_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 拒绝时间
         owner:
           type: integer
         transaction:
+          type: integer
+          nullable: true
+        refund_transaction:
           type: integer
           nullable: true
       required:
@@ -3185,6 +3360,22 @@ components:
         * `requested` - 待处理
         * `fulfilled` - 已兑现
         * `rejected` - 已拒绝
+    RedemptionRejectResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     Register:
       type: object
       properties:
@@ -4238,6 +4429,10 @@ components:
           title: 愿望描述
         source:
           $ref: '#/components/schemas/SourceEnum'
+        price_tier:
+          allOf:
+          - $ref: '#/components/schemas/PriceTierEnum'
+          title: 价格档位
         price_secondary:
           type: integer
           maximum: 2147483647
@@ -4252,8 +4447,11 @@ components:
         is_enabled:
           type: boolean
           title: 是否上架
+        auto_refund_on_reject:
+          type: boolean
+          title: 拒绝时自动退款
         ai_pricing:
-          title: AI定价数据
+          title: AI 定价数据
         owner:
           type: integer
           readOnly: true
@@ -4320,6 +4518,72 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishPricingMeta:
+      type: object
+      properties:
+        tiers: {}
+        bounds: {}
+      required:
+      - bounds
+      - tiers
+    WishPricingMetaResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WishPricingMeta'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    WishPricingPreview:
+      type: object
+      properties:
+        price_tier:
+          $ref: '#/components/schemas/PriceTierEnum'
+        suggested_price:
+          type: integer
+          minimum: 0
+      required:
+      - price_tier
+      - suggested_price
+    WishPricingPreviewPayload:
+      type: object
+      properties:
+        price_tier:
+          $ref: '#/components/schemas/PriceTierEnum'
+        requested_price:
+          type: integer
+        clamped_price:
+          type: integer
+        bounds: {}
+      required:
+      - bounds
+      - clamped_price
+      - price_tier
+      - requested_price
+    WishPricingPreviewResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/WishPricingPreviewPayload'
         success:
           type: boolean
         code:
