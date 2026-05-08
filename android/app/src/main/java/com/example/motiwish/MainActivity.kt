@@ -53,6 +53,10 @@ class MainActivity : ComponentActivity() {
                 // 获取当前路由的状态，用来判断是否在 splash 页面
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
+                val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
+                val gachaViewModel = remember { GachaViewModel(currencyRepository) }
+                val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
+                val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -67,8 +71,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 val items = listOf(
                                     "tasks" to "任务",
-                                    "gacha" to "抽卡",
-                                    "shop" to "商店",
+                                    "store" to "商城",
                                     "profile" to "我的"
                                     //"currency" to "货币",
                                     //"history" to "历史"
@@ -121,10 +124,21 @@ class MainActivity : ComponentActivity() {
                                 ShopScreen(viewModel, navController)
                             }
 
+                            composable("store") {
+                                StoreScreen(
+                                    gachaViewModel = gachaViewModel,
+                                    shopViewModel = shopViewModel,
+                                    currencyViewModel = currencyViewModel, // 传入共享的货币实例
+                                    navController = navController
+                                )
+                            }
+
                             composable("profile") {
-                                val currencyViewModel = CurrencyViewModel(currencyRepository)
-                                val historyViewModel = HistoryViewModel(taskRepository, currencyRepository)
-                                ProfileScreen(navController, currencyViewModel, historyViewModel)
+                                ProfileScreen(
+                                    navController = navController,
+                                    currencyViewModel = currencyViewModel, // 传入共享的货币实例
+                                    historyViewModel = historyViewModel
+                                )
                             }
 
                             composable("currency") {
