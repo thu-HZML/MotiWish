@@ -250,7 +250,7 @@ paths:
   /api/v1/gacha/pools/:
     get:
       operationId: gacha_pools_list
-      description: 返回当前可用的抽卡池列表。前端通常在抽卡首页进入时调用。
+      description: 返回当前可用卡池列表，包括四档奖励和三层保底参数。
       summary: 获取卡池列表
       parameters:
       - name: page
@@ -273,7 +273,7 @@ paths:
   /api/v1/gacha/pools/{id}/:
     get:
       operationId: gacha_pools_retrieve
-      description: 返回指定卡池的完整配置，包括消耗、概率和保底参数。
+      description: 返回指定卡池详情，包括奖励、概率与保底阈值。
       summary: 获取单个卡池
       parameters:
       - in: path
@@ -296,7 +296,7 @@ paths:
   /api/v1/gacha/pools/{id}/draw/:
     post:
       operationId: gacha_pools_draw_create
-      description: 执行单抽或多抽。当前支持一次请求抽 1 到 10 次，后端会在事务中统一处理扣费、发奖和记录生成。
+      description: 执行单抽或多抽。服务端会在事务中统一处理一级货币扣费、二级货币发放、保底状态推进和抽卡记录生成。
       summary: 执行抽卡
       parameters:
       - in: path
@@ -335,10 +335,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/GachaDrawResponse'
           description: ''
+  /api/v1/gacha/pools/{id}/state/:
+    get:
+      operationId: gacha_pools_state_retrieve
+      description: 返回当前用户在指定卡池上的抽卡累计与三层保底进度。
+      summary: 查看当前卡池保底状态
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 卡池.
+        required: true
+      tags:
+      - Gacha
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GachaStateResponse'
+          description: ''
   /api/v1/gacha/records/:
     get:
       operationId: gacha_records_list
-      description: 返回当前用户的抽卡历史记录，适合抽卡记录页和资产回顾页使用。
+      description: 返回当前用户的抽卡历史记录。
       summary: 获取抽卡记录
       parameters:
       - name: page
@@ -1396,7 +1419,7 @@ paths:
   /api/v1/wallet/:
     get:
       operationId: wallet_retrieve
-      description: 返回当前用户钱包中的一级货币和二级货币余额。建议在首页、商城、抽卡页进入时调用。
+      description: 返回当前用户钱包余额，同时包含一级货币负债状态和负债下限信息。
       summary: 获取钱包余额
       tags:
       - Wallet
@@ -1416,27 +1439,59 @@ paths:
                     message: 获取钱包成功
                     data:
                       id: 1
-                      primary_balance: 120
-                      secondary_balance: 36
-                      created_at: '2026-04-29T12:00:00+08:00'
-                      updated_at: '2026-04-29T12:00:00+08:00'
+                      primary_balance: -35
+                      secondary_balance: 120
+                      primary_debt: 35
+                      is_in_debt: true
+                      primary_debt_floor: -100
+                      created_at: '2026-05-08T10:00:00+08:00'
+                      updated_at: '2026-05-08T10:00:00+08:00'
+          description: ''
+  /api/v1/wallet/debt-reset/:
+    post:
+      operationId: wallet_debt_reset_create
+      description: 将当前一级货币负债清零。若当前没有负债，则返回当前钱包状态且不产生流水。
+      summary: 执行一级货币债务重置
+      tags:
+      - Wallet
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDebtResetResponse'
+              examples:
+                债务重置响应:
+                  value:
+                    success: true
+                    code: OK
+                    message: 债务重置完成
+                    data:
+                      id: 1
+                      primary_balance: 0
+                      secondary_balance: 120
+                      primary_debt: 0
+                      is_in_debt: false
+                      primary_debt_floor: -100
           description: ''
   /api/v1/wallet/transactions/:
     get:
       operationId: wallet_transactions_retrieve
-      description: 返回当前用户最近的钱包变动记录，可按货币类型和变动原因筛选。适合用于资产明细页、任务结算回溯页、抽卡消耗记录页。
+      description: 返回最近的钱包变动记录，可按货币类型和原因筛选。
       summary: 获取钱包流水
       parameters:
       - in: query
         name: currency_type
         schema:
           type: string
-        description: 货币类型筛选：primary=一级货币，secondary=二级货币。
+        description: 货币类型筛选：primary 或 secondary。
       - in: query
         name: reason
         schema:
           type: string
-        description: 交易原因筛选：task_reward、task_penalty、gacha_cost、gacha_reward、shop_redeem、manual_adjust。
+        description: 交易原因筛选：task_reward、task_penalty、gacha_cost、gacha_reward、shop_redeem、manual_adjust、debt_reset。
       tags:
       - Wallet
       security:
@@ -1447,24 +1502,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WalletTransactionListResponse'
-              examples:
-                钱包流水响应片段:
-                  value:
-                    success: true
-                    code: OK
-                    message: 获取钱包流水成功
-                    data:
-                    - id: 21
-                      currency_type: primary
-                      reason: task_reward
-                      delta: 15
-                      balance_before: 105
-                      balance_after: 120
-                      reference_type: task_occurrence
-                      reference_id: 88
-                      memo: 完成任务：背单词 30 分钟
-                      payload: {}
-                      created_at: '2026-04-29T11:15:00+08:00'
           description: ''
 components:
   schemas:
@@ -1581,6 +1618,9 @@ components:
         * `normal` - 一般
         * `ample` - 充足
         * `undisclosed` - 暂不填写
+    BlankEnum:
+      enum:
+      - ''
     ChronotypeEnum:
       enum:
       - morning
@@ -1803,16 +1843,6 @@ components:
           allOf:
           - $ref: '#/components/schemas/GachaPool'
           readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 创建时间
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 更新时间
         cost_primary:
           type: integer
           maximum: 2147483647
@@ -1823,37 +1853,26 @@ components:
           maximum: 2147483647
           minimum: 0
           title: 获得二级货币
-        multiplier:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 命中倍率
-        is_bonus:
-          type: boolean
-          title: 是否小暴击
-        is_jackpot:
-          type: boolean
-          title: 是否大暴击
-        is_pity:
-          type: boolean
-          title: 是否保底
-        owner:
-          type: integer
-        cost_transaction:
-          type: integer
-          nullable: true
-        reward_transaction:
-          type: integer
-          nullable: true
+        reward_tier:
+          allOf:
+          - $ref: '#/components/schemas/RewardTierEnum'
+          title: 奖励档位
+        pity_tier:
+          title: 触发的保底层级
+          oneOf:
+          - $ref: '#/components/schemas/PityTierEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
       required:
       - cost_primary
       - created_at
       - id
-      - multiplier
-      - owner
       - pool
       - reward_secondary
-      - updated_at
     GachaDrawResponse:
       type: object
       properties:
@@ -1878,6 +1897,69 @@ components:
         id:
           type: integer
           readOnly: true
+        name:
+          type: string
+          title: 卡池名称
+          maxLength: 80
+        cost_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 抽卡消耗一级货币
+        common_reward:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 普通档奖励
+        rare_reward:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 优秀档奖励
+        epic_reward:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 暴击档奖励
+        legendary_reward:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 传说档奖励
+        common_rate:
+          type: number
+          format: double
+          title: 普通档概率
+        rare_rate:
+          type: number
+          format: double
+          title: 优秀档概率
+        epic_rate:
+          type: number
+          format: double
+          title: 暴击档概率
+        legendary_rate:
+          type: number
+          format: double
+          title: 传说档概率
+        rare_pity_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 优秀保底阈值
+        epic_pity_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 暴击保底阈值
+        legendary_pity_threshold:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 传说保底阈值
+        is_active:
+          type: boolean
+          title: 是否启用
         created_at:
           type: string
           format: date-time
@@ -1888,51 +1970,6 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
-        name:
-          type: string
-          title: 卡池名称
-          maxLength: 80
-        cost_primary:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 抽卡消耗
-        base_secondary_reward:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 基础二级货币
-        bonus_rate:
-          type: number
-          format: double
-          title: 小暴击概率
-        jackpot_rate:
-          type: number
-          format: double
-          title: 大暴击概率
-        bonus_multiplier:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 小暴击倍率
-        jackpot_multiplier:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 大暴击倍率
-        pity_threshold:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 保底阈值
-        pity_multiplier:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 保底倍率
-        is_active:
-          type: boolean
-          title: 是否启用
       required:
       - created_at
       - id
@@ -1972,6 +2009,29 @@ components:
       - data
       - message
       - success
+    GachaPoolUserState:
+      type: object
+      properties:
+        total_draws:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 累计抽卡次数
+        draws_since_rare:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 距上次优秀及以上次数
+        draws_since_epic:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 距上次暴击及以上次数
+        draws_since_legendary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 距上次传说次数
     GachaRecordDetailResponse:
       type: object
       properties:
@@ -1995,6 +2055,22 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GachaDrawRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    GachaStateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/GachaPoolUserState'
         success:
           type: boolean
         code:
@@ -2742,6 +2818,17 @@ components:
         * `medium` - 中
         * `high` - 高
         * `undisclosed` - 暂不填写
+    PityTierEnum:
+      enum:
+      - rare
+      - epic
+      - legendary
+      type: string
+      description: |-
+        * `` - 无
+        * `rare` - 优秀保底
+        * `epic` - 暴击保底
+        * `legendary` - 传说保底
     PlanningStylePreferenceEnum:
       enum:
       - structured
@@ -2871,6 +2958,7 @@ components:
       - gacha_reward
       - shop_redeem
       - manual_adjust
+      - debt_reset
       type: string
       description: |-
         * `task_reward` - 任务奖励
@@ -2879,6 +2967,7 @@ components:
         * `gacha_reward` - 抽卡奖励
         * `shop_redeem` - 商店兑换
         * `manual_adjust` - 后台调整
+        * `debt_reset` - 债务重置
     RecurrenceEnum:
       enum:
       - none
@@ -3083,6 +3172,18 @@ components:
         * `big_later` - 偏好延迟大奖励
         * `balanced` - 二者平衡
         * `undisclosed` - 暂不填写
+    RewardTierEnum:
+      enum:
+      - common
+      - rare
+      - epic
+      - legendary
+      type: string
+      description: |-
+        * `common` - 普通
+        * `rare` - 优秀
+        * `epic` - 暴击
+        * `legendary` - 传说
     SleepQualityEnum:
       enum:
       - low
@@ -3675,13 +3776,22 @@ components:
         primary_balance:
           type: integer
           maximum: 2147483647
-          minimum: 0
+          minimum: -2147483648
           title: 一级货币余额
         secondary_balance:
           type: integer
           maximum: 2147483647
           minimum: 0
           title: 二级货币余额
+        primary_debt:
+          type: integer
+          readOnly: true
+        is_in_debt:
+          type: boolean
+          readOnly: true
+        primary_debt_floor:
+          type: integer
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -3695,7 +3805,26 @@ components:
       required:
       - created_at
       - id
+      - is_in_debt
+      - primary_debt
+      - primary_debt_floor
       - updated_at
+    WalletDebtResetResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Wallet'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     WalletDetailResponse:
       type: object
       properties:
@@ -3734,12 +3863,12 @@ components:
         balance_before:
           type: integer
           maximum: 2147483647
-          minimum: 0
+          minimum: -2147483648
           title: 变更前余额
         balance_after:
           type: integer
           maximum: 2147483647
-          minimum: 0
+          minimum: -2147483648
           title: 变更后余额
         reference_type:
           type: string
@@ -3747,7 +3876,7 @@ components:
           maxLength: 50
         reference_id:
           type: string
-          title: 引用对象ID
+          title: 引用对象 ID
           maxLength: 50
         memo:
           type: string

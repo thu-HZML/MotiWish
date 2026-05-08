@@ -15,16 +15,27 @@ class TransactionReason(models.TextChoices):
     GACHA_REWARD = "gacha_reward", "抽卡奖励"
     SHOP_REDEEM = "shop_redeem", "商店兑换"
     MANUAL_ADJUST = "manual_adjust", "后台调整"
+    DEBT_RESET = "debt_reset", "债务重置"
 
 
 class Wallet(TimeStampedModel):
+    PRIMARY_DEBT_FLOOR = -100
+
     owner = models.OneToOneField("users.User", on_delete=models.CASCADE, related_name="wallet")
-    primary_balance = models.PositiveIntegerField(default=0, verbose_name="一级货币余额")
+    primary_balance = models.IntegerField(default=0, verbose_name="一级货币余额")
     secondary_balance = models.PositiveIntegerField(default=0, verbose_name="二级货币余额")
 
     class Meta:
         verbose_name = "钱包"
         verbose_name_plural = "钱包"
+
+    @property
+    def primary_debt(self):
+        return abs(self.primary_balance) if self.primary_balance < 0 else 0
+
+    @property
+    def is_in_debt(self):
+        return self.primary_balance < 0
 
 
 class WalletTransaction(TimeStampedModel):
@@ -33,10 +44,10 @@ class WalletTransaction(TimeStampedModel):
     currency_type = models.CharField(max_length=20, choices=CurrencyType.choices, verbose_name="货币类型")
     reason = models.CharField(max_length=32, choices=TransactionReason.choices, verbose_name="交易原因")
     delta = models.IntegerField(verbose_name="变动值")
-    balance_before = models.PositiveIntegerField(verbose_name="变更前余额")
-    balance_after = models.PositiveIntegerField(verbose_name="变更后余额")
+    balance_before = models.IntegerField(verbose_name="变更前余额")
+    balance_after = models.IntegerField(verbose_name="变更后余额")
     reference_type = models.CharField(max_length=50, blank=True, verbose_name="引用对象类型")
-    reference_id = models.CharField(max_length=50, blank=True, verbose_name="引用对象ID")
+    reference_id = models.CharField(max_length=50, blank=True, verbose_name="引用对象 ID")
     memo = models.CharField(max_length=255, blank=True, verbose_name="备注")
     payload = models.JSONField(default=dict, blank=True, verbose_name="扩展数据")
 
