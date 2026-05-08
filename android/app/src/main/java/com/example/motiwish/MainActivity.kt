@@ -122,7 +122,9 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable("profile") {
-                                ProfileScreen(navController)
+                                val currencyViewModel = CurrencyViewModel(currencyRepository)
+                                val historyViewModel = HistoryViewModel(taskRepository, currencyRepository)
+                                ProfileScreen(navController, currencyViewModel, historyViewModel)
                             }
 
                             composable("currency") {
