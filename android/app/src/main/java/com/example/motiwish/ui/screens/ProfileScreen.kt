@@ -25,6 +25,9 @@ import androidx.navigation.NavController
 import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.HistoryViewModel
 
+import androidx.compose.material.icons.filled.CurrencyExchange
+import androidx.compose.material.icons.filled.Star
+
 @Composable
 fun ProfileScreen(
     navController: NavController,
@@ -124,18 +127,40 @@ fun ProfileScreen(
                         // 使用 transactions 并读取正确的属性 (修正了属性名称)
                         items(transactions.take(10)) { transaction ->
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp), // 稍微增加一点上下间距
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically // 确保左右居中对齐
                             ) {
-                                // 你的记录来源字段叫 source
-                                Text(transaction.source, fontSize = 14.sp)
-
-                                val isIncome = transaction.type == "INCOME"
+                                // 左侧：交易来源
                                 Text(
-                                    text = "${if (isIncome) "+" else "-"}${transaction.amount}",
-                                    color = if (isIncome) Color.Green else Color.Red,
-                                    fontWeight = FontWeight.Bold
+                                    text = transaction.source,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.weight(1f) // 让文字占据多余空间，防止长文本顶到右边
                                 )
+
+                                // 右侧：图标 + 金额
+                                val isIncome = transaction.type == "INCOME"
+                                // 根据数据库里存的 currencyType 决定图标和颜色
+                                // (假设你存的是 PRIMARY/SECONDARY 或包含 一级/二级 字眼，请根据你的 Repository 实际写入的字符串调整)
+                                val isPrimary = transaction.currencyType.contains("PRIMARY", ignoreCase = true)
+                                        || transaction.currencyType.contains("一级")
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (isPrimary) Icons.Default.CurrencyExchange else Icons.Default.Star,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp).padding(end = 4.dp),
+                                        tint = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = "${if (isIncome) "+" else "-"}${transaction.amount}",
+                                        color = if (isIncome) Color(0xFF388E3C) else Color(0xFFD32F2F), // 使用稍微柔和一点的红绿色
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
                             }
                         }
                     }
