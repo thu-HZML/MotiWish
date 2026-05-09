@@ -5,57 +5,73 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
-from apps.shop.models import RedemptionRecord, WishItem, WishPriceTier
+from apps.shop.models import RedemptionRecord, UserInventory, WishItem
 from apps.shop.serializers import (
     RedemptionActionSerializer,
     RedemptionRecordSerializer,
+    ShopMetaSerializer,
+    UserInventorySerializer,
     WishItemSerializer,
-    WishPricingMetaSerializer,
     WishPricingPreviewPayloadSerializer,
     WishPricingPreviewSerializer,
+    build_shop_meta,
 )
-from apps.shop.services import PRICE_BOUNDS, clamp_price_by_tier, fulfill_redemption, redeem_item, reject_redemption
+from apps.shop.services import clamp_price_by_tier, fulfill_redemption, redeem_item, reject_redemption, use_inventory_item
 
 
 @extend_schema_view(
     list=extend_schema(
         tags=["Shop"],
-        summary="获取愿望商品列表",
-        description="返回当前用户创建的愿望商品列表，适合商城首页、愿望管理页使用。",
-        responses=api_envelope_serializer("WishItemListResponse", WishItemSerializer(many=True)),
+        summary="获取商店商品列表",
+        description="返回当前用户的商店商品，支持养成材料、功能轻道具和愿望奖励。",
+        responses=api_envelope_serializer("ShopItemListResponse", WishItemSerializer(many=True)),
     ),
     create=extend_schema(
         tags=["Shop"],
-        summary="创建愿望商品",
-        description="创建一个可兑换的愿望商品。价格需要符合当前档位的边界约束。",
+        summary="创建商店商品",
+        description="创建可购买商品。养成材料需要配置 effect_payload.experience；功能轻道具会购买后进入库存。",
         request=WishItemSerializer,
-        responses=api_envelope_serializer("WishItemCreateResponse", WishItemSerializer()),
+        responses=api_envelope_serializer("ShopItemCreateResponse", WishItemSerializer()),
         examples=[
             OpenApiExample(
-                "创建中愿望商品",
+                "创建经验材料",
                 value={
-                    "title": "周末看一场电影",
-                    "description": "完成阶段目标后的放松奖励",
-                    "source": "manual",
-                    "price_tier": "medium",
-                    "price_secondary": 180,
-                    "inventory": 1,
+                    "title": "小份经验书",
+                    "category": "growth_material",
+                    "item_kind": "experience_pack",
+                    "rarity": "common",
+                    "price_tier": "small",
+                    "price_secondary": 40,
+                    "effect_payload": {"experience": 50},
+                    "inventory": None,
                     "is_enabled": True,
-                    "auto_refund_on_reject": True,
-                    "ai_pricing": {"source": "manual"},
                 },
                 request_only=True,
-            )
+            ),
+            OpenApiExample(
+                "创建还债卡",
+                value={
+                    "title": "还债卡",
+                    "category": "utility_item",
+                    "item_kind": "debt_repayment_card",
+                    "rarity": "rare",
+                    "price_tier": "medium",
+                    "price_secondary": 180,
+                    "inventory": 10,
+                    "is_enabled": True,
+                },
+                request_only=True,
+            ),
         ],
     ),
     retrieve=extend_schema(
         tags=["Shop"],
-        summary="获取单个愿望商品",
-        responses=api_envelope_serializer("WishItemDetailResponse", WishItemSerializer()),
+        summary="获取单个商店商品",
+        responses=api_envelope_serializer("ShopItemDetailResponse", WishItemSerializer()),
     ),
-    update=extend_schema(tags=["Shop"], summary="更新愿望商品", request=WishItemSerializer),
-    partial_update=extend_schema(tags=["Shop"], summary="部分更新愿望商品", request=WishItemSerializer),
-    destroy=extend_schema(tags=["Shop"], summary="删除愿望商品"),
+    update=extend_schema(tags=["Shop"], summary="更新商店商品", request=WishItemSerializer),
+    partial_update=extend_schema(tags=["Shop"], summary="部分更新商店商品", request=WishItemSerializer),
+    destroy=extend_schema(tags=["Shop"], summary="删除商店商品"),
 )
 class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -63,42 +79,34 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     queryset = WishItem.objects.none()
 
     def get_queryset(self):
-        return WishItem.objects.filter(owner=self.request.user)
+        queryset = WishItem.objects.filter(owner=self.request.user)
+        category = self.request.query_params.get("category")
+        item_kind = self.request.query_params.get("item_kind")
+        if category:
+            queryset = queryset.filter(category=category)
+        if item_kind:
+            queryset = queryset.filter(item_kind=item_kind)
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
     @extend_schema(
         tags=["Shop"],
-        summary="获取愿望定价元信息",
-        description="返回前端构建愿望定价表单和 AI 定价边界所需的价格档位信息。",
-        responses=api_envelope_serializer("WishPricingMetaResponse", WishPricingMetaSerializer()),
+        summary="获取商店元信息",
+        description="返回商品大类、商品类型、稀有度和价格档位，供前端渲染商店表单和筛选器。",
+        responses=api_envelope_serializer("ShopMetaResponse", ShopMetaSerializer()),
     )
-    @action(detail=False, methods=["get"], url_path="pricing/meta")
+    @action(detail=False, methods=["get"], url_path="meta")
     def pricing_meta(self, request):
-        data = {
-            "tiers": [
-                {"value": WishPriceTier.SMALL, "label": "小愿望"},
-                {"value": WishPriceTier.MEDIUM, "label": "中愿望"},
-                {"value": WishPriceTier.LARGE, "label": "大愿望"},
-            ],
-            "bounds": PRICE_BOUNDS,
-        }
-        return api_response(data=data, message="获取愿望定价元信息成功")
+        return api_response(data=build_shop_meta(), message="获取商店元信息成功")
 
     @extend_schema(
         tags=["Shop"],
-        summary="预览愿望定价边界裁剪",
-        description="在真正应用 AI 定价前，先让后端根据价格档位返回裁剪后的合法价格。",
+        summary="预览价格边界裁剪",
+        description="根据价格档位返回裁剪后的合法价格。",
         request=WishPricingPreviewSerializer,
-        responses=api_envelope_serializer("WishPricingPreviewResponse", WishPricingPreviewPayloadSerializer()),
-        examples=[
-            OpenApiExample(
-                "大愿望价格预览",
-                value={"price_tier": "large", "suggested_price": 1600},
-                request_only=True,
-            )
-        ],
+        responses=api_envelope_serializer("ShopPricingPreviewResponse", WishPricingPreviewPayloadSerializer()),
     )
     @action(detail=False, methods=["post"], url_path="pricing/preview")
     def pricing_preview(self, request):
@@ -110,32 +118,63 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
             "price_tier": price_tier,
             "requested_price": suggested_price,
             "clamped_price": clamp_price_by_tier(price_tier=price_tier, suggested_price=suggested_price),
-            "bounds": PRICE_BOUNDS[price_tier],
+            "bounds": build_shop_meta()["bounds"][price_tier],
         }
-        return api_response(data=data, message="愿望定价预览成功")
+        return api_response(data=data, message="价格预览成功")
 
     @extend_schema(
         tags=["Shop"],
-        summary="兑换愿望商品",
-        description="消耗二级货币兑换指定愿望商品，并生成兑换记录。",
-        responses=api_envelope_serializer("WishItemRedeemResponse", RedemptionRecordSerializer()),
+        summary="购买商店商品",
+        description="消耗二级货币购买商品。经验材料会直接增加用户经验；功能轻道具会进入库存；愿望奖励会生成待处理记录。",
+        responses=api_envelope_serializer("ShopItemRedeemResponse", RedemptionRecordSerializer()),
     )
     @action(detail=True, methods=["post"], url_path="redeem")
     def redeem(self, request, pk=None):
         record = redeem_item(user=request.user, item=self.get_object())
-        return api_response(data=RedemptionRecordSerializer(record).data, message="兑换成功")
+        return api_response(data=RedemptionRecordSerializer(record).data, message="购买成功")
 
 
 @extend_schema_view(
     list=extend_schema(
         tags=["Shop"],
-        summary="获取兑换记录",
-        description="返回当前用户的兑换历史。",
+        summary="获取库存列表",
+        responses=api_envelope_serializer("InventoryListResponse", UserInventorySerializer(many=True)),
+    ),
+    retrieve=extend_schema(
+        tags=["Shop"],
+        summary="获取单个库存道具",
+        responses=api_envelope_serializer("InventoryDetailResponse", UserInventorySerializer()),
+    ),
+)
+class UserInventoryViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserInventorySerializer
+    queryset = UserInventory.objects.none()
+
+    def get_queryset(self):
+        return UserInventory.objects.filter(owner=self.request.user, quantity__gt=0).select_related("item")
+
+    @extend_schema(
+        tags=["Shop"],
+        summary="使用库存道具",
+        description="当前支持主动使用还债卡，使用后会清空一级货币负债并扣除一张卡。",
+        responses=api_envelope_serializer("InventoryUseResponse", UserInventorySerializer()),
+    )
+    @action(detail=True, methods=["post"], url_path="use")
+    def use(self, request, pk=None):
+        result = use_inventory_item(user=request.user, inventory=self.get_object())
+        return api_response(data=UserInventorySerializer(result["inventory"]).data, message="道具使用成功")
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Shop"],
+        summary="获取兑换/购买记录",
         responses=api_envelope_serializer("RedemptionRecordListResponse", RedemptionRecordSerializer(many=True)),
     ),
     retrieve=extend_schema(
         tags=["Shop"],
-        summary="获取单条兑换记录",
+        summary="获取单条兑换/购买记录",
         responses=api_envelope_serializer("RedemptionRecordDetailResponse", RedemptionRecordSerializer()),
     ),
 )
@@ -149,8 +188,7 @@ class RedemptionRecordViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         tags=["Shop"],
-        summary="兑现兑换记录",
-        description="将待处理兑换记录标记为已兑现。",
+        summary="兑现愿望奖励记录",
         request=RedemptionActionSerializer,
         responses=api_envelope_serializer("RedemptionFulfillResponse", RedemptionRecordSerializer()),
     )
@@ -163,17 +201,9 @@ class RedemptionRecordViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         tags=["Shop"],
-        summary="拒绝兑换记录",
-        description="将待处理兑换记录标记为已拒绝。默认根据商品设置自动退款。",
+        summary="拒绝愿望奖励记录",
         request=RedemptionActionSerializer,
         responses=api_envelope_serializer("RedemptionRejectResponse", RedemptionRecordSerializer()),
-        examples=[
-            OpenApiExample(
-                "拒绝并自动退款",
-                value={"note": "当前不满足兑现条件", "refund": True},
-                request_only=True,
-            )
-        ],
     )
     @action(detail=True, methods=["post"], url_path="reject")
     def reject(self, request, pk=None):

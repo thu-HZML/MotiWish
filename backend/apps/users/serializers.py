@@ -10,6 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
     display_nickname = serializers.CharField(read_only=True)
     default_avatar_group = serializers.CharField(read_only=True)
+    next_level_experience = serializers.IntegerField(read_only=True)
     prompt_profile = serializers.SerializerMethodField()
 
     class Meta:
@@ -38,6 +39,10 @@ class UserSerializer(serializers.ModelSerializer):
             "basic_profile_completion_score",
             "basic_profile_missing_fields",
             "basic_profile_last_prompted_at",
+            "level",
+            "experience",
+            "total_experience",
+            "next_level_experience",
             "prompt_profile",
         )
         read_only_fields = (
@@ -50,6 +55,10 @@ class UserSerializer(serializers.ModelSerializer):
             "basic_profile_completion_score",
             "basic_profile_missing_fields",
             "basic_profile_last_prompted_at",
+            "level",
+            "experience",
+            "total_experience",
+            "next_level_experience",
             "prompt_profile",
         )
 

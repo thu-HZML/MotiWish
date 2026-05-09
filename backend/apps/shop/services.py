@@ -1,9 +1,18 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.shop.models import RedemptionRecord, RedemptionStatus, WishItem, WishPriceTier
+from apps.shop.models import (
+    RedemptionRecord,
+    RedemptionStatus,
+    ShopItemCategory,
+    ShopItemKind,
+    UserInventory,
+    WishItem,
+    WishPriceTier,
+)
+from apps.users.services import grant_experience
 from apps.wallet.models import CurrencyType, TransactionReason
-from apps.wallet.services import change_balance
+from apps.wallet.services import reset_primary_debt, change_balance
 
 PRICE_BOUNDS = {
     WishPriceTier.SMALL: {"min": 30, "max": 120},
@@ -17,31 +26,99 @@ def clamp_price_by_tier(*, price_tier, suggested_price):
     return max(bounds["min"], min(bounds["max"], suggested_price))
 
 
+def _validate_item_shape(item):
+    if item.category == ShopItemCategory.GROWTH_MATERIAL and item.item_kind != ShopItemKind.EXPERIENCE_PACK:
+        raise ValueError("养成材料目前仅支持经验材料")
+    if item.category == ShopItemCategory.WISH_REWARD and item.item_kind != ShopItemKind.WISH:
+        raise ValueError("愿望奖励的商品类型必须为 wish")
+
+
+def _decrease_stock(item):
+    if item.inventory is not None:
+        if item.inventory <= 0:
+            raise ValueError("库存不足")
+        item.inventory -= 1
+        item.save(update_fields=["inventory", "updated_at"])
+
+
+def _increase_inventory(*, user, item, quantity=1):
+    inventory, _ = UserInventory.objects.select_for_update().get_or_create(
+        owner=user,
+        item=item,
+        defaults={"quantity": 0},
+    )
+    if not item.is_stackable and inventory.quantity > 0:
+        raise ValueError("该商品不可重复持有")
+    inventory.quantity += quantity
+    inventory.save(update_fields=["quantity", "updated_at"])
+    return inventory
+
+
 @transaction.atomic
 def redeem_item(*, user, item):
     item = WishItem.objects.select_for_update().get(pk=item.pk)
     if not item.is_enabled:
         raise ValueError("该商品未上架")
-    if item.inventory is not None and item.inventory <= 0:
-        raise ValueError("库存不足")
+    _validate_item_shape(item)
+
+    _decrease_stock(item)
     _, transaction_record = change_balance(
         user=user,
         currency_type=CurrencyType.SECONDARY,
         delta=-item.price_secondary,
         reason=TransactionReason.SHOP_REDEEM,
-        reference_type="wish_item",
+        reference_type="shop_item",
         reference_id=item.id,
-        memo=f"兑换愿望：{item.title}",
+        memo=f"购买商品：{item.title}",
     )
-    if item.inventory is not None:
-        item.inventory -= 1
-        item.save(update_fields=["inventory", "updated_at"])
+
+    status = RedemptionStatus.REQUESTED
+    fulfilled_at = None
+    effect_snapshot = {}
+
+    if item.category == ShopItemCategory.GROWTH_MATERIAL:
+        experience = int(item.effect_payload.get("experience", 0))
+        if experience <= 0:
+            raise ValueError("经验材料必须配置正数 experience")
+        effect_snapshot = grant_experience(user=user, amount=experience)
+        status = RedemptionStatus.COMPLETED
+        fulfilled_at = timezone.now()
+    elif item.category == ShopItemCategory.UTILITY_ITEM:
+        inventory = _increase_inventory(user=user, item=item)
+        effect_snapshot = {"inventory_id": inventory.id, "quantity": inventory.quantity}
+        status = RedemptionStatus.COMPLETED
+        fulfilled_at = timezone.now()
+
     return RedemptionRecord.objects.create(
         owner=user,
         item=item,
         cost_secondary=item.price_secondary,
+        status=status,
         transaction=transaction_record,
+        effect_snapshot=effect_snapshot,
+        fulfilled_at=fulfilled_at,
     )
+
+
+@transaction.atomic
+def use_inventory_item(*, user, inventory):
+    inventory = UserInventory.objects.select_for_update().select_related("item").get(pk=inventory.pk, owner=user)
+    if inventory.quantity <= 0:
+        raise ValueError("道具数量不足")
+
+    item = inventory.item
+    if item.item_kind != ShopItemKind.DEBT_REPAYMENT_CARD:
+        raise ValueError("该道具当前暂不支持主动使用")
+
+    wallet, transaction_record = reset_primary_debt(user=user, memo=f"使用道具：{item.title}")
+    inventory.quantity -= 1
+    inventory.save(update_fields=["quantity", "updated_at"])
+    return {
+        "inventory": inventory,
+        "wallet": wallet,
+        "transaction": transaction_record,
+        "effect": "debt_reset",
+    }
 
 
 @transaction.atomic
