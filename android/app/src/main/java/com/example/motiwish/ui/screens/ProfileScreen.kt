@@ -101,7 +101,7 @@ fun ProfileScreen(
                     // 直接从 CurrencyBalance 对象读取数据 (修正了循环读取的错误)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("一级货币", fontSize = 12.sp)
-                        Text("${balance?.primaryCurrency ?: 100}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("${balance?.primaryCurrency ?: 0}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("二级货币", fontSize = 12.sp)
