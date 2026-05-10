@@ -3,13 +3,14 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.users.models import User
+from apps.users.models import DynamicProfile, StableProfile, User
 
 
 class UserSerializer(serializers.ModelSerializer):
     avatar_url = serializers.SerializerMethodField()
     display_nickname = serializers.CharField(read_only=True)
     default_avatar_group = serializers.CharField(read_only=True)
+    next_level_experience = serializers.IntegerField(read_only=True)
     prompt_profile = serializers.SerializerMethodField()
 
     class Meta:
@@ -26,12 +27,40 @@ class UserSerializer(serializers.ModelSerializer):
             "gender",
             "birth_date",
             "occupation",
+            "education_stage",
+            "language_preference",
+            "region",
             "bio",
             "timezone",
+            "long_term_goals",
+            "focus_areas",
             "onboarding_completed",
+            "basic_profile_completed",
+            "basic_profile_completion_score",
+            "basic_profile_missing_fields",
+            "basic_profile_last_prompted_at",
+            "level",
+            "experience",
+            "total_experience",
+            "next_level_experience",
             "prompt_profile",
         )
-        read_only_fields = ("id", "display_nickname", "avatar_url", "default_avatar_group", "prompt_profile")
+        read_only_fields = (
+            "id",
+            "display_nickname",
+            "avatar_url",
+            "default_avatar_group",
+            "onboarding_completed",
+            "basic_profile_completed",
+            "basic_profile_completion_score",
+            "basic_profile_missing_fields",
+            "basic_profile_last_prompted_at",
+            "level",
+            "experience",
+            "total_experience",
+            "next_level_experience",
+            "prompt_profile",
+        )
 
     @extend_schema_field(serializers.URLField(allow_null=True))
     def get_avatar_url(self, obj) -> str | None:
@@ -47,7 +76,11 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        help_text="登录密码，至少 8 位。",
+    )
 
     class Meta:
         model = User
@@ -57,10 +90,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             "password",
             "nickname",
             "gender",
-            "birth_date",
             "occupation",
+            "education_stage",
+            "language_preference",
             "bio",
             "timezone",
+            "long_term_goals",
+            "focus_areas",
         )
 
     def create(self, validated_data):
@@ -72,8 +108,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
+    username = serializers.CharField(help_text="用户名。")
+    password = serializers.CharField(write_only=True, help_text="登录密码。")
 
     def validate(self, attrs):
         user = authenticate(username=attrs["username"], password=attrs["password"])
@@ -83,10 +119,135 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
-class ProfileUpdateSerializer(serializers.ModelSerializer):
+class BaseProfileUpdateSerializer(serializers.ModelSerializer):
+    nickname = serializers.CharField(required=False, allow_blank=True, help_text="昵称。为空时展示默认昵称。")
+    avatar = serializers.ImageField(required=False, allow_null=True, help_text="头像图片文件，可为空。")
+    birth_date = serializers.DateField(required=False, allow_null=True, help_text="生日，可为空。")
+    region = serializers.CharField(required=False, allow_blank=True, help_text="所在地区，可为空。")
+    bio = serializers.CharField(required=False, allow_blank=True, help_text="个人签名，最长 100 字符。")
+    timezone = serializers.CharField(required=False, help_text="时区，例如 Asia/Shanghai。")
+    long_term_goals = serializers.ListField(
+        child=serializers.ChoiceField(choices=User.GoalCategory.choices),
+        required=False,
+        help_text='长期目标类型，多选；如果跳过，请传 ["unspecified"]。',
+    )
+    focus_areas = serializers.ListField(
+        child=serializers.ChoiceField(choices=User.FocusArea.choices),
+        required=False,
+        help_text='当前主要关注领域，多选；如果跳过，请传 ["unspecified"]。',
+    )
+
     class Meta:
         model = User
-        fields = ("nickname", "avatar", "gender", "birth_date", "occupation", "bio", "timezone")
+        fields = (
+            "nickname",
+            "avatar",
+            "gender",
+            "birth_date",
+            "occupation",
+            "education_stage",
+            "language_preference",
+            "region",
+            "bio",
+            "timezone",
+            "long_term_goals",
+            "focus_areas",
+        )
+
+
+class StableProfileSerializer(serializers.ModelSerializer):
+    should_prompt = serializers.BooleanField(read_only=True)
+    next_prompt_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = StableProfile
+        fields = (
+            "self_management_challenges",
+            "motivation_preferences",
+            "reward_preference",
+            "penalty_tolerance",
+            "stress_sensitivity",
+            "self_discipline_score",
+            "chronotype",
+            "energy_peak_periods",
+            "task_granularity_preference",
+            "planning_style_preference",
+            "is_completed",
+            "completion_score",
+            "missing_fields",
+            "last_prompted_at",
+            "next_prompt_at",
+            "questionnaire_completed_at",
+            "should_prompt",
+        )
+        read_only_fields = (
+            "is_completed",
+            "completion_score",
+            "missing_fields",
+            "last_prompted_at",
+            "next_prompt_at",
+            "questionnaire_completed_at",
+            "should_prompt",
+        )
+
+    def validate_self_discipline_score(self, value):
+        if value is not None and not 1 <= value <= 10:
+            raise serializers.ValidationError("self_discipline_score 必须在 1 到 10 之间。")
+        return value
+
+
+class DynamicProfileSerializer(serializers.ModelSerializer):
+    should_prompt = serializers.BooleanField(read_only=True)
+    next_prompt_at = serializers.DateTimeField(read_only=True)
+    has_meaningful_data = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = DynamicProfile
+        fields = (
+            "current_stage_tags",
+            "stress_level",
+            "sleep_quality",
+            "mood_state",
+            "available_time_level",
+            "current_top_goal",
+            "current_main_blocker",
+            "weekly_time_budget_hours",
+            "last_prompted_at",
+            "next_prompt_at",
+            "should_prompt",
+            "has_meaningful_data",
+        )
+        read_only_fields = (
+            "last_prompted_at",
+            "next_prompt_at",
+            "should_prompt",
+            "has_meaningful_data",
+        )
+
+    def validate_stress_level(self, value):
+        if value is not None and not 1 <= value <= 5:
+            raise serializers.ValidationError("stress_level 必须在 1 到 5 之间。")
+        return value
+
+
+class ProfileMetaSerializer(serializers.Serializer):
+    basic = serializers.JSONField(help_text="基础信息层元数据，前端可据此渲染注册后补全表单。")
+    stable = serializers.JSONField(help_text="稳定画像问卷元数据，前端可据此渲染问卷页面。")
+    dynamic = serializers.JSONField(help_text="动态状态元数据，前端可据此渲染轻提示表单。")
+    reminder_policy = serializers.JSONField(help_text="三层画像的提醒策略说明。")
+
+
+class ProfilePromptStatusSerializer(serializers.Serializer):
+    basic = serializers.JSONField(help_text="基础信息层当前的完善度和提醒状态。")
+    stable = serializers.JSONField(help_text="稳定画像层当前的问卷完成度和提醒状态。")
+    dynamic = serializers.JSONField(help_text="动态状态层当前的提示状态。")
+
+
+class ReminderAckSerializer(serializers.Serializer):
+    layer = serializers.ChoiceField(
+        choices=("basic", "stable", "dynamic"),
+        help_text="本次确认已展示的提醒层级：basic、stable 或 dynamic。",
+    )
 
 
 class JWTTokenSerializer(serializers.Serializer):

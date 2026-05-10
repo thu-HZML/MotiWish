@@ -1,6 +1,6 @@
-from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
@@ -32,7 +32,9 @@ class AgentWorkflowCatalogView(APIView):
     )
     def get(self, request):
         return api_response(
-            data=AgentWorkflowDefinitionSerializer(agent_registry.list_workflows(), many=True).data,
+            data=AgentWorkflowDefinitionSerializer(
+                agent_registry.list_workflows(), many=True
+            ).data,
             message="获取 AI 工作流目录成功",
         )
 
@@ -59,22 +61,58 @@ class AIProviderConfigView(APIView):
     list=extend_schema(
         tags=["AI"],
         summary="获取 AI 报告任务列表",
-        responses=api_envelope_serializer("AIReportJobListResponse", AIReportJobSerializer(many=True)),
+        description="返回当前用户创建的 AI 报告任务列表，适合 AI 页或历史报告页使用。",
+        responses=api_envelope_serializer(
+            "AIReportJobListResponse", AIReportJobSerializer(many=True)
+        ),
     ),
     create=extend_schema(
         tags=["AI"],
         summary="创建 AI 报告任务",
+        description="创建一条 AI 报告生成任务，用于后续异步分析、总结或推荐。",
         request=AIReportJobSerializer,
-        responses=api_envelope_serializer("AIReportJobCreateResponse", AIReportJobSerializer()),
+        responses=api_envelope_serializer(
+            "AIReportJobCreateResponse", AIReportJobSerializer()
+        ),
+        examples=[
+            OpenApiExample(
+                "创建周报任务",
+                value={
+                    "report_type": "weekly",
+                    "summary": "生成本周任务完成情况与建议",
+                    "status": "pending",
+                    "input_payload": {"range": "2026-W18"},
+                    "result_payload": {},
+                },
+                request_only=True,
+            )
+        ],
     ),
     retrieve=extend_schema(
         tags=["AI"],
         summary="获取单个 AI 报告任务",
-        responses=api_envelope_serializer("AIReportJobDetailResponse", AIReportJobSerializer()),
+        description="返回一条具体的 AI 报告任务详情，包括输入、状态和结果。",
+        responses=api_envelope_serializer(
+            "AIReportJobDetailResponse", AIReportJobSerializer()
+        ),
     ),
-    update=extend_schema(tags=["AI"], summary="更新 AI 报告任务", request=AIReportJobSerializer),
-    partial_update=extend_schema(tags=["AI"], summary="部分更新 AI 报告任务", request=AIReportJobSerializer),
-    destroy=extend_schema(tags=["AI"], summary="删除 AI 报告任务"),
+    update=extend_schema(
+        tags=["AI"],
+        summary="更新 AI 报告任务",
+        description="全量更新 AI 报告任务。",
+        request=AIReportJobSerializer,
+    ),
+    partial_update=extend_schema(
+        tags=["AI"],
+        summary="部分更新 AI 报告任务",
+        description="部分更新 AI 报告任务，例如回填状态或结果摘要。",
+        request=AIReportJobSerializer,
+    ),
+    destroy=extend_schema(
+        tags=["AI"],
+        summary="删除 AI 报告任务",
+        description="删除一条 AI 报告任务记录。",
+    ),
 )
 class AIReportJobViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -92,18 +130,24 @@ class AIReportJobViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     list=extend_schema(
         tags=["AI"],
         summary="获取 Agent 运行记录列表",
-        responses=api_envelope_serializer("AIAgentRunListResponse", AIAgentRunSerializer(many=True)),
+        responses=api_envelope_serializer(
+            "AIAgentRunListResponse", AIAgentRunSerializer(many=True)
+        ),
     ),
     create=extend_schema(
         tags=["AI"],
         summary="创建 Agent 运行记录",
         request=AIAgentRunSerializer,
-        responses=api_envelope_serializer("AIAgentRunCreateResponse", AIAgentRunSerializer()),
+        responses=api_envelope_serializer(
+            "AIAgentRunCreateResponse", AIAgentRunSerializer()
+        ),
     ),
     retrieve=extend_schema(
         tags=["AI"],
         summary="获取单个 Agent 运行记录",
-        responses=api_envelope_serializer("AIAgentRunDetailResponse", AIAgentRunSerializer()),
+        responses=api_envelope_serializer(
+            "AIAgentRunDetailResponse", AIAgentRunSerializer()
+        ),
     ),
 )
 class AIAgentRunViewSet(ApiResponseMixin, viewsets.ModelViewSet):
@@ -124,13 +168,19 @@ class AIAgentRunViewSet(ApiResponseMixin, viewsets.ModelViewSet):
             input_payload=serializer.validated_data.get("input_payload", {}),
         )
         output = self.get_serializer(agent_run).data
-        return api_response(data=output, message="创建 Agent 运行记录成功", status_code=status.HTTP_201_CREATED)
+        return api_response(
+            data=output,
+            message="创建 Agent 运行记录成功",
+            status_code=status.HTTP_201_CREATED,
+        )
 
     @extend_schema(
         tags=["AI"],
         summary="执行一次 mock Agent 工作流",
         request=AIAgentRunExecuteSerializer,
-        responses=api_envelope_serializer("AIAgentRunExecuteResponse", AIAgentRunSerializer()),
+        responses=api_envelope_serializer(
+            "AIAgentRunExecuteResponse", AIAgentRunSerializer()
+        ),
     )
     @action(detail=True, methods=["post"], url_path="execute")
     def execute(self, request, pk=None):
@@ -141,4 +191,6 @@ class AIAgentRunViewSet(ApiResponseMixin, viewsets.ModelViewSet):
             agent_run.input_payload = serializer.validated_data["input_payload"]
             agent_run.save(update_fields=["input_payload", "updated_at"])
         agent_run = execute_agent_run(agent_run=agent_run)
-        return api_response(data=self.get_serializer(agent_run).data, message="执行 Agent 工作流成功")
+        return api_response(
+            data=self.get_serializer(agent_run).data, message="执行 Agent 工作流成功"
+        )

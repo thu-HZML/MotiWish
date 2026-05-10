@@ -1,5 +1,5 @@
 from django.db.models import Count, Q
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import OpenApiExample, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
@@ -16,6 +16,10 @@ class DashboardReportView(APIView):
     @extend_schema(
         tags=["Reports"],
         summary="获取仪表盘报表",
+        description=(
+            "返回首页仪表盘所需的轻量统计数据，包括钱包余额和任务完成概览。"
+            "适合首页、个人中心首页卡片使用。"
+        ),
         responses=api_envelope_serializer(
             "DashboardReportResponse",
             inline_serializer(
@@ -38,6 +42,21 @@ class DashboardReportView(APIView):
                 },
             ),
         ),
+        examples=[
+            OpenApiExample(
+                "仪表盘报表示例",
+                value={
+                    "success": True,
+                    "code": "OK",
+                    "message": "获取报表成功",
+                    "data": {
+                        "wallet": {"primary_balance": 120, "secondary_balance": 36},
+                        "task_stats": {"total": 58, "completed": 41},
+                    },
+                },
+                response_only=True,
+            )
+        ],
     )
     def get(self, request):
         wallet, _ = Wallet.objects.get_or_create(owner=request.user)

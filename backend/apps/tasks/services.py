@@ -1,7 +1,15 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.tasks.models import OccurrenceStatus, RecurrenceType, Task, TaskOccurrence, TaskType
+from apps.tasks.models import (
+    OccurrenceStatus,
+    PricingStatus,
+    RecurrenceType,
+    Task,
+    TaskOccurrence,
+    TaskType,
+)
+from apps.tasks.pricing import build_pricing_context
 from apps.wallet.models import CurrencyType, TransactionReason
 from apps.wallet.services import change_balance
 
@@ -14,7 +22,10 @@ def _task_matches_date(task, target_date):
     if task.ends_on and target_date > task.ends_on:
         return False
     if task.task_type == TaskType.ONE_TIME:
-        return task.due_at.date() == target_date if task.due_at else True
+        available_from = task.starts_on or timezone.localdate(task.created_at)
+        if target_date < available_from:
+            return False
+        return target_date <= task.due_at.date() if task.due_at else True
     if task.task_type == TaskType.DAILY or task.recurrence == RecurrenceType.DAILY:
         return True
     if task.recurrence == RecurrenceType.WEEKLY:
@@ -64,3 +75,56 @@ def complete_task(*, task, target_date=None, progress=None):
         occurrence.reward_transaction = reward_transaction
     occurrence.save()
     return occurrence
+
+
+@transaction.atomic
+def request_task_pricing(*, task):
+    pricing_context = build_pricing_context(
+        task_data={
+            "task_type": task.task_type,
+            "recurrence": task.recurrence,
+            "settlement_track": task.settlement_track,
+            "difficulty_level": task.difficulty_level,
+            "estimated_focus_minutes": task.estimated_focus_minutes,
+            "progress_target": task.progress_target,
+            "metric_key": task.metric_key,
+            "target_value": task.target_value,
+            "weekdays": task.weekdays,
+            "month_days": task.month_days,
+            "tags": task.tags,
+        }
+    )
+    task.pricing_status = PricingStatus.PENDING
+    task.pricing_requested_at = timezone.now()
+    task.pricing_snapshot = {
+        "formula": pricing_context.formula,
+        "normalized_payload": pricing_context.normalized_payload,
+        "requested": True,
+    }
+    task.save(update_fields=["pricing_status", "pricing_requested_at", "pricing_snapshot", "updated_at"])
+    return task
+
+
+@transaction.atomic
+def apply_task_pricing(*, task, reward_primary, penalty_primary, pricing_payload):
+    task.reward_primary = reward_primary
+    task.penalty_primary = penalty_primary
+    task.pricing_status = PricingStatus.APPLIED
+    task.pricing_resolved_at = timezone.now()
+    task.pricing_snapshot = {
+        **(task.pricing_snapshot or {}),
+        "applied_reward_primary": reward_primary,
+        "applied_penalty_primary": penalty_primary,
+        "pricing_payload": pricing_payload,
+    }
+    task.save(
+        update_fields=[
+            "reward_primary",
+            "penalty_primary",
+            "pricing_status",
+            "pricing_resolved_at",
+            "pricing_snapshot",
+            "updated_at",
+        ]
+    )
+    return task
