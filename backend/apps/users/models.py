@@ -102,6 +102,9 @@ class User(AbstractUser, TimeStampedModel):
     basic_profile_completion_score = models.PositiveSmallIntegerField(default=0, verbose_name="基础资料完善度")
     basic_profile_missing_fields = models.JSONField(default=list, blank=True, verbose_name="基础资料待补充字段")
     basic_profile_last_prompted_at = models.DateTimeField(null=True, blank=True, verbose_name="基础资料上次提醒时间")
+    level = models.PositiveIntegerField(default=1, verbose_name="用户等级")
+    experience = models.PositiveIntegerField(default=0, verbose_name="当前等级经验")
+    total_experience = models.PositiveIntegerField(default=0, verbose_name="累计经验")
 
     REQUIRED_FIELDS = ["email"]
 
@@ -123,6 +126,10 @@ class User(AbstractUser, TimeStampedModel):
             self.Gender.FEMALE: "female-default-1",
             self.Gender.UNKNOWN: "unknown-default-1",
         }.get(self.gender, "unknown-default-1")
+
+    @property
+    def next_level_experience(self):
+        return self.level * 100
 
     @property
     def normalized_long_term_goals(self):

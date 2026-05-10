@@ -2,9 +2,11 @@ from datetime import date, datetime
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
 
-from apps.tasks.models import Task, TaskType
+from apps.tasks.models import PricingStatus, SettlementTrack, Task, TaskType
 from apps.tasks.services import ensure_occurrences_for_date
 
 
@@ -53,3 +55,61 @@ class OneTimeTaskOccurrenceTests(TestCase):
         self.assertEqual(before_queryset.count(), 0)
         self.assertEqual(created_day_queryset.count(), 1)
         self.assertEqual(created_day_queryset.first().task_id, task.id)
+
+
+class TaskPricingApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="pricing_user",
+            email="pricing@example.com",
+            password="Password123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.task = Task.objects.create(
+            owner=self.user,
+            title="科研调试任务",
+            task_type=TaskType.ONE_TIME,
+            settlement_track=SettlementTrack.EXPLORATION,
+            estimated_focus_minutes=180,
+        )
+
+    def test_pricing_preview_requires_focus_minutes_for_exploration(self):
+        url = reverse("task-pricing-preview")
+        response = self.client.post(
+            url,
+            {
+                "task_type": "one_time",
+                "settlement_track": "exploration",
+                "difficulty_level": "high",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_pricing_request_marks_task_pending(self):
+        url = reverse("task-pricing-request", kwargs={"pk": self.task.pk})
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.pricing_status, PricingStatus.PENDING)
+        self.assertIn("formula", self.task.pricing_snapshot)
+
+    def test_pricing_apply_updates_reward_and_penalty(self):
+        url = reverse("task-pricing-apply", kwargs={"pk": self.task.pk})
+        response = self.client.post(
+            url,
+            {
+                "reward_primary": 120,
+                "penalty_primary": 25,
+                "pricing_payload": {"model": "mock-ai", "confidence": 0.8},
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.task.refresh_from_db()
+        self.assertEqual(self.task.reward_primary, 120)
+        self.assertEqual(self.task.penalty_primary, 25)
+        self.assertEqual(self.task.pricing_status, PricingStatus.APPLIED)

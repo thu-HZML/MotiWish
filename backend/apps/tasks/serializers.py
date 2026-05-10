@@ -1,92 +1,37 @@
 from rest_framework import serializers
 
-from apps.tasks.models import Task, TaskOccurrence
+from apps.tasks.models import (
+    DifficultyLevel,
+    PricingStatus,
+    SettlementTrack,
+    Task,
+    TaskOccurrence,
+)
+from apps.tasks.pricing import DIFFICULTY_FACTORS, build_pricing_context
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(
-        max_length=120,
-        help_text="任务标题，建议用一句简短动作描述，例如“背单词 30 分钟”。",
-    )
-    description = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        help_text="任务详细说明，可为空。",
-    )
-    task_type = serializers.ChoiceField(
-        choices=Task._meta.get_field("task_type").choices,
-        help_text="任务类型：daily=日常任务，recurring=周期任务，one_time=一次性任务。",
-    )
-    recurrence = serializers.ChoiceField(
-        choices=Task._meta.get_field("recurrence").choices,
-        required=False,
-        help_text="重复规则：none=不重复，daily=每天，weekly=每周，monthly=每月。daily 任务通常可保持 none。",
-    )
+    title = serializers.CharField(max_length=120, help_text="任务标题。")
+    description = serializers.CharField(required=False, allow_blank=True, help_text="任务详细说明，可为空。")
     weekdays = serializers.ListField(
         child=serializers.IntegerField(min_value=0, max_value=6),
         required=False,
-        help_text="每周重复时生效，使用 Python weekday 编码：0=周一，1=周二，...，6=周日。",
+        help_text="weekly 任务使用，0=周一，6=周日。",
     )
     month_days = serializers.ListField(
         child=serializers.IntegerField(min_value=1, max_value=31),
         required=False,
-        help_text="每月重复时生效，填写每月的第几天，例如 [1, 15, 28]。",
+        help_text="monthly 任务使用，例如 [1, 15, 28]。",
     )
-    metric_key = serializers.CharField(
-        required=False,
-        allow_blank=True,
-        max_length=50,
-        help_text="可选的系统指标键，用于后续接入打卡统计、AI 分析或自动进度汇总。",
-    )
-    target_value = serializers.IntegerField(
+    metric_key = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    target_value = serializers.IntegerField(required=False, allow_null=True)
+    estimated_focus_minutes = serializers.IntegerField(
         required=False,
         allow_null=True,
-        help_text="指标目标值，可与 metric_key 搭配使用，例如目标步数、目标时长。",
-    )
-    progress_target = serializers.IntegerField(
         min_value=0,
-        required=False,
-        help_text="任务完成时默认写入的进度值，complete 接口未传 progress 时会使用它。",
+        help_text="探索轨道任务可填写的预估专注时长（分钟）。",
     )
-    reward_primary = serializers.IntegerField(
-        min_value=0,
-        required=False,
-        help_text="完成任务后奖励的一级货币数量。",
-    )
-    penalty_primary = serializers.IntegerField(
-        min_value=0,
-        required=False,
-        help_text="预留的惩罚金额。当前完成任务逻辑会发奖励，但尚未自动执行超时扣罚。",
-    )
-    starts_on = serializers.DateField(
-        required=False,
-        allow_null=True,
-        help_text="任务生效开始日期，留空表示立即生效。",
-    )
-    ends_on = serializers.DateField(
-        required=False,
-        allow_null=True,
-        help_text="任务生效结束日期，留空表示长期有效。",
-    )
-    due_at = serializers.DateTimeField(
-        required=False,
-        allow_null=True,
-        help_text="一次性任务的截止时间。当前系统会让 one_time 任务从生效日起到 due_at 当天每天都出现。",
-    )
-    status = serializers.ChoiceField(
-        choices=Task._meta.get_field("status").choices,
-        required=False,
-        help_text="任务状态：active=启用，archived=归档。归档任务不会再生成新的任务实例。",
-    )
-    tags = serializers.ListField(
-        child=serializers.CharField(max_length=50),
-        required=False,
-        help_text="可选标签列表，例如 [\"study\", \"health\"]。",
-    )
-    ai_metadata = serializers.JSONField(
-        required=False,
-        help_text="AI 扩展元数据，预留给评分、推荐、标签推断等能力。",
-    )
+    pricing_snapshot = serializers.JSONField(read_only=True)
 
     class Meta:
         model = Task
@@ -96,6 +41,9 @@ class TaskSerializer(serializers.ModelSerializer):
             "description",
             "task_type",
             "recurrence",
+            "settlement_track",
+            "difficulty_level",
+            "estimated_focus_minutes",
             "weekdays",
             "month_days",
             "metric_key",
@@ -103,6 +51,10 @@ class TaskSerializer(serializers.ModelSerializer):
             "progress_target",
             "reward_primary",
             "penalty_primary",
+            "pricing_status",
+            "pricing_requested_at",
+            "pricing_resolved_at",
+            "pricing_snapshot",
             "starts_on",
             "ends_on",
             "due_at",
@@ -112,15 +64,30 @@ class TaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("created_at", "updated_at")
+        read_only_fields = (
+            "pricing_status",
+            "pricing_requested_at",
+            "pricing_resolved_at",
+            "pricing_snapshot",
+            "created_at",
+            "updated_at",
+        )
 
     def validate(self, attrs):
         task_type = attrs.get("task_type", getattr(self.instance, "task_type", None))
         recurrence = attrs.get("recurrence", getattr(self.instance, "recurrence", "none"))
+        settlement_track = attrs.get(
+            "settlement_track",
+            getattr(self.instance, "settlement_track", SettlementTrack.REGULAR),
+        )
         weekdays = attrs.get("weekdays", getattr(self.instance, "weekdays", []))
         month_days = attrs.get("month_days", getattr(self.instance, "month_days", []))
         starts_on = attrs.get("starts_on", getattr(self.instance, "starts_on", None))
         ends_on = attrs.get("ends_on", getattr(self.instance, "ends_on", None))
+        estimated_focus_minutes = attrs.get(
+            "estimated_focus_minutes",
+            getattr(self.instance, "estimated_focus_minutes", None),
+        )
 
         if starts_on and ends_on and starts_on > ends_on:
             raise serializers.ValidationError("starts_on 不能晚于 ends_on。")
@@ -139,6 +106,14 @@ class TaskSerializer(serializers.ModelSerializer):
 
         if task_type == "one_time" and recurrence != "none":
             raise serializers.ValidationError({"recurrence": "one_time 任务不能再设置重复规则。"})
+
+        if settlement_track == SettlementTrack.EXPLORATION and not estimated_focus_minutes:
+            raise serializers.ValidationError(
+                {"estimated_focus_minutes": "探索轨道任务必须提供 estimated_focus_minutes。"}
+            )
+
+        if settlement_track == SettlementTrack.EXPLORATION and task_type == "daily":
+            raise serializers.ValidationError({"task_type": "探索轨道不建议用于 daily 任务。"})
 
         return attrs
 
@@ -163,12 +138,77 @@ class TaskOccurrenceSerializer(serializers.ModelSerializer):
 
 
 class TaskActionSerializer(serializers.Serializer):
-    occurrence_date = serializers.DateField(
-        required=False,
-        help_text="要结算的任务实例日期，默认是今天。",
-    )
+    occurrence_date = serializers.DateField(required=False, help_text="要结算的任务实例日期，默认今天。")
     progress = serializers.IntegerField(
         required=False,
         min_value=0,
         help_text="本次完成时写入的进度值；不传则自动使用任务的 progress_target。",
     )
+
+
+class TaskPricingPreviewSerializer(serializers.Serializer):
+    task_type = serializers.ChoiceField(choices=Task._meta.get_field("task_type").choices)
+    recurrence = serializers.ChoiceField(
+        choices=Task._meta.get_field("recurrence").choices,
+        required=False,
+        default="none",
+    )
+    settlement_track = serializers.ChoiceField(choices=SettlementTrack.choices, default=SettlementTrack.REGULAR)
+    difficulty_level = serializers.ChoiceField(
+        choices=DifficultyLevel.choices,
+        required=False,
+        default=DifficultyLevel.MEDIUM,
+    )
+    estimated_focus_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    progress_target = serializers.IntegerField(required=False, min_value=0, default=100)
+    metric_key = serializers.CharField(required=False, allow_blank=True, max_length=50, default="")
+    target_value = serializers.IntegerField(required=False, allow_null=True, default=None)
+    weekdays = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=6), required=False, default=list)
+    month_days = serializers.ListField(child=serializers.IntegerField(min_value=1, max_value=31), required=False, default=list)
+    tags = serializers.ListField(child=serializers.CharField(max_length=50), required=False, default=list)
+
+    def validate(self, attrs):
+        if attrs["settlement_track"] == SettlementTrack.EXPLORATION and not attrs.get("estimated_focus_minutes"):
+            raise serializers.ValidationError(
+                {"estimated_focus_minutes": "探索轨道预览必须提供 estimated_focus_minutes。"}
+            )
+        return attrs
+
+
+class TaskPricingPreviewPayloadSerializer(serializers.Serializer):
+    settlement_track = serializers.ChoiceField(choices=SettlementTrack.choices)
+    task_type = serializers.ChoiceField(choices=Task._meta.get_field("task_type").choices)
+    formula = serializers.CharField()
+    normalized_payload = serializers.JSONField()
+    difficulty_factor_hint = serializers.IntegerField(required=False)
+
+
+class TaskPricingApplySerializer(serializers.Serializer):
+    reward_primary = serializers.IntegerField(min_value=0, help_text="AI 产出的一级货币奖励。")
+    penalty_primary = serializers.IntegerField(min_value=0, help_text="AI 产出的一级货币惩罚。")
+    pricing_payload = serializers.JSONField(
+        required=False,
+        help_text="AI 回写的完整定价结果，可包含理由、置信度、分段信息等。",
+    )
+
+
+class TaskPricingMetaSerializer(serializers.Serializer):
+    settlement_tracks = serializers.JSONField()
+    formulas = serializers.JSONField()
+    difficulty_factors = serializers.JSONField()
+
+
+def build_preview_response(validated_data):
+    context = build_pricing_context(task_data=validated_data)
+    response = {
+        "settlement_track": context.settlement_track,
+        "task_type": context.task_type,
+        "formula": context.formula,
+        "normalized_payload": context.normalized_payload,
+    }
+    if context.settlement_track == SettlementTrack.EXPLORATION:
+        response["difficulty_factor_hint"] = DIFFICULTY_FACTORS.get(
+            validated_data.get("difficulty_level", DifficultyLevel.MEDIUM),
+            DIFFICULTY_FACTORS[DifficultyLevel.MEDIUM],
+        )
+    return response

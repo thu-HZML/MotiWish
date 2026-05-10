@@ -6,8 +6,12 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
-from apps.gacha.models import GachaDrawRecord, GachaPool
-from apps.gacha.serializers import GachaDrawRecordSerializer, GachaPoolSerializer
+from apps.gacha.models import GachaDrawRecord, GachaPool, GachaPoolUserState
+from apps.gacha.serializers import (
+    GachaDrawRecordSerializer,
+    GachaPoolSerializer,
+    GachaPoolUserStateSerializer,
+)
 from apps.gacha.services import draw_once
 
 
@@ -15,13 +19,13 @@ from apps.gacha.services import draw_once
     list=extend_schema(
         tags=["Gacha"],
         summary="获取卡池列表",
-        description="返回当前可用的抽卡池列表。前端通常在抽卡首页进入时调用。",
+        description="返回当前可用卡池列表，包括四档奖励和三层保底参数。",
         responses=api_envelope_serializer("GachaPoolListResponse", GachaPoolSerializer(many=True)),
     ),
     retrieve=extend_schema(
         tags=["Gacha"],
         summary="获取单个卡池",
-        description="返回指定卡池的完整配置，包括消耗、概率和保底参数。",
+        description="返回指定卡池详情，包括奖励、概率与保底阈值。",
         responses=api_envelope_serializer("GachaPoolDetailResponse", GachaPoolSerializer()),
     ),
 )
@@ -32,11 +36,20 @@ class GachaPoolViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
 
     @extend_schema(
         tags=["Gacha"],
+        summary="查看当前卡池保底状态",
+        description="返回当前用户在指定卡池上的抽卡累计与三层保底进度。",
+        responses=api_envelope_serializer("GachaStateResponse", GachaPoolUserStateSerializer()),
+    )
+    @action(detail=True, methods=["get"], url_path="state")
+    def state(self, request, pk=None):
+        pool = self.get_object()
+        state, _ = GachaPoolUserState.objects.get_or_create(owner=request.user, pool=pool)
+        return api_response(data=GachaPoolUserStateSerializer(state).data, message="获取卡池状态成功")
+
+    @extend_schema(
+        tags=["Gacha"],
         summary="执行抽卡",
-        description=(
-            "执行单抽或多抽。当前支持一次请求抽 1 到 10 次，"
-            "后端会在事务中统一处理扣费、发奖和记录生成。"
-        ),
+        description="执行单抽或多抽。服务端会在事务中统一处理一级货币扣费、二级货币发放、保底状态推进和抽卡记录生成。",
         responses=api_envelope_serializer("GachaDrawResponse", GachaDrawRecordSerializer(many=True)),
         examples=[
             OpenApiExample("单抽请求", value={"times": 1}, request_only=True),
@@ -70,7 +83,7 @@ class GachaPoolViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
     list=extend_schema(
         tags=["Gacha"],
         summary="获取抽卡记录",
-        description="返回当前用户的抽卡历史记录，适合抽卡记录页和资产回顾页使用。",
+        description="返回当前用户的抽卡历史记录。",
         responses=api_envelope_serializer("GachaRecordListResponse", GachaDrawRecordSerializer(many=True)),
     ),
     retrieve=extend_schema(
