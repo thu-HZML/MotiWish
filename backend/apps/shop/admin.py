@@ -7,8 +7,12 @@ from apps.shop.models import RedemptionRecord, WishItem
 class WishItemAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "catalog_key",
         "title",
         "owner",
+        "category",
+        "item_kind",
+        "rarity",
         "price_tier",
         "price_secondary",
         "inventory",
@@ -16,7 +20,7 @@ class WishItemAdmin(admin.ModelAdmin):
         "is_enabled",
         "auto_refund_on_reject",
     )
-    list_filter = ("price_tier", "source", "is_enabled", "auto_refund_on_reject")
+    list_filter = ("category", "item_kind", "rarity", "price_tier", "source", "is_enabled", "auto_refund_on_reject")
 
 
 @admin.register(RedemptionRecord)

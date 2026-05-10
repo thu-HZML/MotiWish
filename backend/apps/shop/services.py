@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
+from apps.shop.catalog import DEFAULT_SHOP_ITEMS
 from apps.shop.models import (
     RedemptionRecord,
     RedemptionStatus,
@@ -31,6 +32,21 @@ def _validate_item_shape(item):
         raise ValueError("养成材料目前仅支持经验材料")
     if item.category == ShopItemCategory.WISH_REWARD and item.item_kind != ShopItemKind.WISH:
         raise ValueError("愿望奖励的商品类型必须为 wish")
+
+
+@transaction.atomic
+def ensure_default_shop_items(*, user):
+    created_items = []
+    for payload in DEFAULT_SHOP_ITEMS:
+        catalog_key = payload["catalog_key"]
+        item, created = WishItem.objects.get_or_create(
+            owner=user,
+            catalog_key=catalog_key,
+            defaults=payload,
+        )
+        if created:
+            created_items.append(item)
+    return created_items
 
 
 def _decrease_stock(item):
@@ -111,6 +127,8 @@ def use_inventory_item(*, user, inventory):
         raise ValueError("该道具当前暂不支持主动使用")
 
     wallet, transaction_record = reset_primary_debt(user=user, memo=f"使用道具：{item.title}")
+    if transaction_record is None:
+        raise ValueError("当前没有一级货币负债，不能使用还债卡")
     inventory.quantity -= 1
     inventory.save(update_fields=["quantity", "updated_at"])
     return {

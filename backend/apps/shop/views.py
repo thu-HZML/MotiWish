@@ -16,7 +16,14 @@ from apps.shop.serializers import (
     WishPricingPreviewSerializer,
     build_shop_meta,
 )
-from apps.shop.services import clamp_price_by_tier, fulfill_redemption, redeem_item, reject_redemption, use_inventory_item
+from apps.shop.services import (
+    clamp_price_by_tier,
+    ensure_default_shop_items,
+    fulfill_redemption,
+    redeem_item,
+    reject_redemption,
+    use_inventory_item,
+)
 
 
 @extend_schema_view(
@@ -79,6 +86,7 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     queryset = WishItem.objects.none()
 
     def get_queryset(self):
+        ensure_default_shop_items(user=self.request.user)
         queryset = WishItem.objects.filter(owner=self.request.user)
         category = self.request.query_params.get("category")
         item_kind = self.request.query_params.get("item_kind")

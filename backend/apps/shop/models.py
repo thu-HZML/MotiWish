@@ -42,6 +42,7 @@ class RedemptionStatus(models.TextChoices):
 
 
 class WishItem(UserOwnedModel):
+    catalog_key = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="目录键")
     title = models.CharField(max_length=120, verbose_name="商品名称")
     description = models.TextField(blank=True, verbose_name="商品描述")
     category = models.CharField(
