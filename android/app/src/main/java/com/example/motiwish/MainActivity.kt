@@ -9,7 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -19,15 +18,13 @@ import com.example.motiwish.data.repository.*
 import com.example.motiwish.ui.screens.*
 import com.example.motiwish.ui.theme.MySelfManagementAppTheme
 import com.example.motiwish.viewmodel.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.work.*
 import java.util.concurrent.TimeUnit
 
-//图标导入
+// 图标导入
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.navigation.compose.currentBackStackEntryAsState
 
 class MainActivity : ComponentActivity() {
 
@@ -39,18 +36,27 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize database and repositories
+        // 初始化数据库和仓库 (保持不变)
         database = AppDatabase.getDatabase(this)
         taskRepository = TaskRepository(database.taskDao())
         currencyRepository = CurrencyRepository(database.currencyDao())
         wishRepository = WishRepository(database.wishDao())
 
-        // Schedule daily reminder for daily tasks
         scheduleDailyReminder()
 
         setContent {
             MySelfManagementAppTheme {
                 val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+
+                // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
+                // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
+                val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
+                val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
+                val gachaViewModel = remember { GachaViewModel(currencyRepository) }
+                val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
+                val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -58,75 +64,86 @@ class MainActivity : ComponentActivity() {
                 ) {
                     Scaffold(
                         bottomBar = {
-                            NavigationBar(
-                                containerColor = Color.White,
-                                tonalElevation = 0.dp
-                            ) {
-                                val items = listOf(
-                                    "tasks" to "任务",
-                                    "gacha" to "抽卡",
-                                    "shop" to "商店",
-                                    "currency" to "货币",
-                                    "history" to "历史"
-                                )
-                                val currentRoute = navController.currentBackStackEntry?.destination?.route
-                                items.forEach { (route, label) ->
-                                    NavigationBarItem(
-                                        selected = currentRoute == route,
-                                        onClick = { navController.navigate(route) {
-                                            popUpTo(navController.graph.startDestinationId) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        } },
-                                        icon = { Icon(Icons.Default.Circle, contentDescription = null) },
-                                        label = { Text(label) }
+                            if (currentRoute != "splash") {
+                                NavigationBar(
+                                    containerColor = Color.White,
+                                    tonalElevation = 0.dp
+                                ) {
+                                    // 【修改 1】：更新底栏项目为 3 个
+                                    val items = listOf(
+                                        Triple("tasks", "任务", Icons.Default.Checklist),
+                                        Triple("store", "商城", Icons.Default.Store),
+                                        Triple("profile", "我的", Icons.Default.Person)
                                     )
+
+                                    items.forEach { (route, label, icon) ->
+                                        NavigationBarItem(
+                                            selected = currentRoute == route,
+                                            onClick = {
+                                                navController.navigate(route) {
+                                                    popUpTo(navController.graph.startDestinationId) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            },
+                                            icon = { Icon(icon, contentDescription = null) },
+                                            label = { Text(label) }
+                                        )
+                                    }
                                 }
                             }
                         }
                     ) { innerPadding ->
                         NavHost(
                             navController = navController,
-                            startDestination = "tasks",
+                            startDestination = "splash",
                             modifier = Modifier.padding(innerPadding)
                         ) {
+                            composable("splash") { SplashScreen(navController) }
+
                             composable("tasks") {
-                                val viewModel = TaskViewModel(taskRepository, currencyRepository)
-                                TaskScreen(viewModel, navController)
+                                TaskScreen(taskViewModel, navController)
                             }
-                            composable("gacha") {
-                                val viewModel = GachaViewModel(currencyRepository)
-                                GachaScreen(viewModel)
+
+                            // 【修改 2】：整合后的商城页面 (包含抽卡和商店)
+                            composable("store") {
+                                StoreScreen(
+                                    gachaViewModel = gachaViewModel,
+                                    shopViewModel = shopViewModel,
+                                    currencyViewModel = currencyViewModel,
+                                    navController = navController
+                                )
                             }
-                            composable("shop") {
-                                val viewModel = ShopViewModel(wishRepository, currencyRepository)
-                                ShopScreen(viewModel, navController)
+
+                            // 【修改 3】：整合后的个人主页 (包含余额展示和历史入口)
+                            composable("profile") {
+                                ProfileScreen(
+                                    navController = navController,
+                                    currencyViewModel = currencyViewModel,
+                                    historyViewModel = historyViewModel
+                                )
                             }
-                            composable("currency") {
-                                val viewModel = CurrencyViewModel(currencyRepository)
-                                CurrencyScreen(viewModel)
-                            }
+
+                            // 这里的 history 路由保留，供个人主页跳转
                             composable("history") {
-                                val viewModel = HistoryViewModel(taskRepository, currencyRepository)
-                                HistoryScreen(viewModel)
+                                HistoryScreen(historyViewModel)
                             }
+
                             composable(
                                 "addWish?wishId={wishId}",
                                 arguments = listOf(navArgument("wishId") { defaultValue = -1 })
                             ) { backStackEntry ->
                                 val wishId = backStackEntry.arguments?.getInt("wishId") ?: -1
-                                val viewModel = ShopViewModel(wishRepository, currencyRepository)
-                                AddWishScreen(viewModel, navController, wishId)
+                                AddWishScreen(shopViewModel, navController, wishId)
                             }
+
                             composable("addPeriodicTask") {
-                                val viewModel = TaskViewModel(taskRepository, currencyRepository)
-                                AddPeriodicTaskScreen(viewModel, navController)
+                                AddPeriodicTaskScreen(taskViewModel, navController)
                             }
                             composable("addOneShotTask") {
-                                val viewModel = TaskViewModel(taskRepository, currencyRepository)
-                                AddOneShotTaskScreen(viewModel, navController)
+                                AddOneShotTaskScreen(taskViewModel, navController)
                             }
                         }
                     }
