@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
                                     // 【修改 1】：更新底栏项目为 3 个
                                     val items = listOf(
                                         Triple("tasks", "任务", Icons.Default.Checklist),
+                                        Triple("history", "日程", Icons.Default.Checklist),
                                         Triple("store", "商城", Icons.Default.Store),
                                         Triple("profile", "我的", Icons.Default.Person)
                                     )

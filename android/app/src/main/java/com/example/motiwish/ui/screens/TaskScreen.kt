@@ -30,13 +30,40 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
     val todayMetric by viewModel.todayMetric.collectAsState()
     val todaysPeriodicTasks by viewModel.todaysPeriodicTasks.collectAsState()
     val oneShotTasks by viewModel.oneShotTasks.collectAsState()
+    val sortedPeriodicTasks = todaysPeriodicTasks.sortedBy { it.second } // false（未完成）在前，true（已完成）在后
+    val sortedOneShotTasks = oneShotTasks.sortedWith(compareBy {
+        when (it.status) {
+            "ACTIVE" -> 0  // 进行中（未完成）排最前
+            else -> 1      // COMPLETED 或 FAILED 排后面
+        }
+    })
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    // 监听返回结果
     LaunchedEffect(Unit) {
-        viewModel.uiMessage.collect { message ->
-            scope.launch {
-                snackbarHostState.showSnackbar(message)
+        val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
+        savedStateHandle?.getLiveData<Boolean>("periodic_task_added")?.observeForever { added ->
+            if (added == true) {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "周期任务添加成功",
+                        duration = SnackbarDuration.Long
+                    )
+                }
+                savedStateHandle.remove<Boolean>("periodic_task_added")
+            }
+        }
+        // 相同方式处理一次性任务添加成功（如果也需要）
+        savedStateHandle?.getLiveData<Boolean>("one_shot_task_added")?.observeForever { added ->
+            if (added == true) {
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        message = "一次性任务添加成功",
+                        duration = SnackbarDuration.Long
+                    )
+                }
+                savedStateHandle.remove<Boolean>("one_shot_task_added")
             }
         }
     }
@@ -137,10 +164,10 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                             color = MaterialTheme.colorScheme.primary
                         )
 
-                        if (todaysPeriodicTasks.isEmpty()) {
+                        if (sortedPeriodicTasks.isEmpty()) {
                             Text("今日没有周期任务")
                         } else {
-                            todaysPeriodicTasks.forEach { (task, completed) ->
+                            sortedPeriodicTasks.forEach { (task, completed) ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -192,10 +219,10 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                             }
                         }
 
-                        if (oneShotTasks.isEmpty()) {
+                        if (sortedOneShotTasks.isEmpty()) {
                             Text("暂无一次性任务")
                         } else {
-                            oneShotTasks.forEach { task ->
+                            sortedOneShotTasks.forEach { task ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
@@ -326,6 +353,7 @@ fun AddPeriodicTaskScreen(viewModel: TaskViewModel, navController: NavController
             )
 
             Button(
+                /*
                 onClick = {
                     if (name.isNotBlank()) {
                         viewModel.addPeriodicTask(name, type, dayValue, reward)
@@ -333,6 +361,14 @@ fun AddPeriodicTaskScreen(viewModel: TaskViewModel, navController: NavController
                             snackbarHostState.showSnackbar("添加成功")
                             navController.popBackStack()
                         }
+                    }
+                },*/
+                onClick = {
+                    if (name.isNotBlank()) {
+                        viewModel.addPeriodicTask(name, type, dayValue, reward)
+                        // 设置返回结果
+                        navController.previousBackStackEntry?.savedStateHandle?.set("periodic_task_added", true)
+                        navController.popBackStack()  // 立即返回
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
