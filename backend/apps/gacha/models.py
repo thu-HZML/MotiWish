@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.common.models import TimeStampedModel
@@ -36,6 +37,35 @@ class GachaPool(TimeStampedModel):
     class Meta:
         verbose_name = "卡池"
         verbose_name_plural = "卡池"
+
+    def clean(self):
+        super().clean()
+        rates = {
+            "common_rate": self.common_rate,
+            "rare_rate": self.rare_rate,
+            "epic_rate": self.epic_rate,
+            "legendary_rate": self.legendary_rate,
+        }
+        errors = {}
+        for field, value in rates.items():
+            if value < 0 or value > 1:
+                errors[field] = "概率必须在 0 到 1 之间。"
+
+        total_rate = sum(rates.values())
+        if abs(total_rate - 1.0) > 1e-9:
+            errors["common_rate"] = "四档概率总和必须等于 1。"
+
+        if self.rare_pity_threshold < 1:
+            errors["rare_pity_threshold"] = "优秀保底阈值必须大于等于 1。"
+        if self.epic_pity_threshold < 1:
+            errors["epic_pity_threshold"] = "暴击保底阈值必须大于等于 1。"
+        if self.legendary_pity_threshold < 1:
+            errors["legendary_pity_threshold"] = "传说保底阈值必须大于等于 1。"
+        if not (self.rare_pity_threshold < self.epic_pity_threshold < self.legendary_pity_threshold):
+            errors["rare_pity_threshold"] = "保底阈值必须满足 rare < epic < legendary。"
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class GachaPoolUserState(TimeStampedModel):

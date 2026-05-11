@@ -437,13 +437,6 @@ paths:
     get:
       operationId: shop_inventory_list
       summary: 获取库存列表
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
       tags:
       - Shop
       security:
@@ -453,7 +446,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedInventoryListResponseList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/InventoryListResponse'
           description: ''
   /api/v1/shop/inventory/{id}/:
     get:
@@ -491,17 +486,6 @@ paths:
         required: true
       tags:
       - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
       security:
       - jwtAuth: []
       responses:
@@ -1157,18 +1141,6 @@ paths:
         required: true
       tags:
       - Tasks
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Task'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Task'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Task'
-        required: true
       security:
       - jwtAuth: []
       responses:
@@ -2744,29 +2716,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GachaRecordListResponse'
-    PaginatedInventoryListResponseList:
-      type: object
-      required:
-      - count
-      - results
-      properties:
-        count:
-          type: integer
-          example: 123
-        next:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
-          type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/InventoryListResponse'
     PaginatedRedemptionRecordListResponseList:
       type: object
       required:
@@ -3070,7 +3019,7 @@ components:
           title: 难度等级
         estimated_focus_minutes:
           type: integer
-          minimum: 0
+          minimum: 1
           nullable: true
           description: 探索轨道任务可填写的预估专注时长（分钟）。
         weekdays:
@@ -3174,6 +3123,10 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        catalog_key:
+          type: string
+          title: 目录键
+          maxLength: 64
         title:
           type: string
           title: 商品名称
@@ -3986,7 +3939,7 @@ components:
           title: 难度等级
         estimated_focus_minutes:
           type: integer
-          minimum: 0
+          minimum: 1
           nullable: true
           description: 探索轨道任务可填写的预估专注时长（分钟）。
         weekdays:
@@ -4316,7 +4269,7 @@ components:
           default: medium
         estimated_focus_minutes:
           type: integer
-          minimum: 0
+          minimum: 1
           nullable: true
         progress_target:
           type: integer
@@ -4784,6 +4737,10 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        catalog_key:
+          type: string
+          title: 目录键
+          maxLength: 64
         title:
           type: string
           title: 商品名称
@@ -4838,6 +4795,7 @@ components:
           readOnly: true
           title: 所属用户
       required:
+      - catalog_key
       - created_at
       - id
       - owner

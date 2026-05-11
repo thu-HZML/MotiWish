@@ -18,7 +18,6 @@ from apps.shop.serializers import (
 )
 from apps.shop.services import (
     clamp_price_by_tier,
-    ensure_default_shop_items,
     fulfill_redemption,
     redeem_item,
     reject_redemption,
@@ -86,7 +85,6 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     queryset = WishItem.objects.none()
 
     def get_queryset(self):
-        ensure_default_shop_items(user=self.request.user)
         queryset = WishItem.objects.filter(owner=self.request.user)
         category = self.request.query_params.get("category")
         item_kind = self.request.query_params.get("item_kind")
@@ -157,6 +155,7 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
 class UserInventoryViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = UserInventorySerializer
+    pagination_class = None
     queryset = UserInventory.objects.none()
 
     def get_queryset(self):
@@ -166,6 +165,7 @@ class UserInventoryViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
         tags=["Shop"],
         summary="使用库存道具",
         description="当前支持主动使用还债卡，使用后会清空一级货币负债并扣除一张卡。",
+        request=None,
         responses=api_envelope_serializer("InventoryUseResponse", UserInventorySerializer()),
     )
     @action(detail=True, methods=["post"], url_path="use")

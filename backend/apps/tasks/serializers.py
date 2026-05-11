@@ -28,7 +28,7 @@ class TaskSerializer(serializers.ModelSerializer):
     estimated_focus_minutes = serializers.IntegerField(
         required=False,
         allow_null=True,
-        min_value=0,
+        min_value=1,
         help_text="探索轨道任务可填写的预估专注时长（分钟）。",
     )
     pricing_snapshot = serializers.JSONField(read_only=True)
@@ -107,7 +107,7 @@ class TaskSerializer(serializers.ModelSerializer):
         if task_type == "one_time" and recurrence != "none":
             raise serializers.ValidationError({"recurrence": "one_time 任务不能再设置重复规则。"})
 
-        if settlement_track == SettlementTrack.EXPLORATION and not estimated_focus_minutes:
+        if settlement_track == SettlementTrack.EXPLORATION and estimated_focus_minutes is None:
             raise serializers.ValidationError(
                 {"estimated_focus_minutes": "探索轨道任务必须提供 estimated_focus_minutes。"}
             )
@@ -159,7 +159,7 @@ class TaskPricingPreviewSerializer(serializers.Serializer):
         required=False,
         default=DifficultyLevel.MEDIUM,
     )
-    estimated_focus_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    estimated_focus_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     progress_target = serializers.IntegerField(required=False, min_value=0, default=100)
     metric_key = serializers.CharField(required=False, allow_blank=True, max_length=50, default="")
     target_value = serializers.IntegerField(required=False, allow_null=True, default=None)
@@ -168,7 +168,7 @@ class TaskPricingPreviewSerializer(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(max_length=50), required=False, default=list)
 
     def validate(self, attrs):
-        if attrs["settlement_track"] == SettlementTrack.EXPLORATION and not attrs.get("estimated_focus_minutes"):
+        if attrs["settlement_track"] == SettlementTrack.EXPLORATION and attrs.get("estimated_focus_minutes") is None:
             raise serializers.ValidationError(
                 {"estimated_focus_minutes": "探索轨道预览必须提供 estimated_focus_minutes。"}
             )

@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.common.api import api_response
 from apps.common.openapi import api_envelope_serializer
+from apps.shop.services import ensure_default_shop_items
 from apps.users.models import DynamicProfile, StableProfile, User
 from apps.users.serializers import (
     BaseProfileUpdateSerializer,
@@ -253,6 +254,7 @@ class RegisterView(APIView):
         user = serializer.save()
         StableProfile.objects.get_or_create(user=user)
         DynamicProfile.objects.get_or_create(user=user)
+        ensure_default_shop_items(user=user)
         return api_response(data=JWTTokenSerializer.from_user(user, request), message="注册成功")
 
 
@@ -272,6 +274,7 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        ensure_default_shop_items(user=serializer.validated_data["user"])
         return api_response(
             data=JWTTokenSerializer.from_user(serializer.validated_data["user"], request),
             message="登录成功",

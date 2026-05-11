@@ -153,6 +153,7 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
         tags=["Tasks"],
         summary="发起任务 AI 定价请求",
         description="将任务标记为待 AI 定价，并固化当前定价上下文快照。当前接口只负责框架和状态流转，不执行真实 AI。",
+        request=None,
         responses=api_envelope_serializer("TaskPricingRequestResponse", TaskSerializer()),
     )
     @action(detail=True, methods=["post"], url_path="pricing/request")

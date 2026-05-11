@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -39,11 +39,12 @@ class OneTimeTaskOccurrenceTests(TestCase):
         self.assertEqual(may_8.first().task_id, task.id)
 
     def test_one_time_task_without_starts_on_uses_creation_date_as_lower_bound(self):
+        due_at = timezone.make_aware(datetime.combine(timezone.localdate() + timedelta(days=1), time(18, 0)))
         task = Task.objects.create(
             owner=self.user,
             title="准备答辩材料",
             task_type=TaskType.ONE_TIME,
-            due_at=datetime(2026, 5, 10, 18, 0, tzinfo=timezone.get_current_timezone()),
+            due_at=due_at,
         )
 
         created_day = timezone.localdate(task.created_at)

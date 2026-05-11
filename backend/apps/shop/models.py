@@ -82,6 +82,13 @@ class WishItem(UserOwnedModel):
         verbose_name = "商店商品"
         verbose_name_plural = "商店商品"
         ordering = ("-created_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("owner", "catalog_key"),
+                condition=~models.Q(catalog_key=""),
+                name="uniq_shop_item_owner_catalog_key_nonempty",
+            )
+        ]
 
 
 class UserInventory(TimeStampedModel):
