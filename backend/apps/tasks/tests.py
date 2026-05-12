@@ -39,11 +39,15 @@ class OneTimeTaskOccurrenceTests(TestCase):
         self.assertEqual(may_8.first().task_id, task.id)
 
     def test_one_time_task_without_starts_on_uses_creation_date_as_lower_bound(self):
+        today = timezone.localdate()
         task = Task.objects.create(
             owner=self.user,
             title="准备答辩材料",
             task_type=TaskType.ONE_TIME,
-            due_at=datetime(2026, 5, 10, 18, 0, tzinfo=timezone.get_current_timezone()),
+            due_at=timezone.make_aware(
+                datetime(today.year, today.month, today.day, 18, 0),
+                timezone.get_current_timezone(),
+            ),
         )
 
         created_day = timezone.localdate(task.created_at)

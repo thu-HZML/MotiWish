@@ -1,20 +1,23 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
+from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.ai.agents.registry import agent_registry
-from apps.ai.config import get_ai_provider_settings
-from apps.ai.models import AIAgentRun, AIReportJob
+from apps.ai.models import AIReportJob, AITaskPricingSession
 from apps.ai.serializers import (
-    AIAgentRunExecuteSerializer,
-    AIAgentRunSerializer,
-    AgentWorkflowDefinitionSerializer,
-    AIProviderConfigSerializer,
     AIReportJobSerializer,
+    AITaskPricingFeedbackSerializer,
+    AITaskPricingSessionCreateSerializer,
+    AITaskPricingSessionSerializer,
 )
-from apps.ai.services import create_agent_run, execute_agent_run
+from apps.ai.services import (
+    accept_task_pricing_session,
+    create_task_pricing_session,
+    revise_task_pricing_session,
+)
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
 
@@ -129,68 +132,95 @@ class AIReportJobViewSet(ApiResponseMixin, viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         tags=["AI"],
-        summary="获取 Agent 运行记录列表",
+        summary="获取任务定价会话列表",
         responses=api_envelope_serializer(
-            "AIAgentRunListResponse", AIAgentRunSerializer(many=True)
-        ),
-    ),
-    create=extend_schema(
-        tags=["AI"],
-        summary="创建 Agent 运行记录",
-        request=AIAgentRunSerializer,
-        responses=api_envelope_serializer(
-            "AIAgentRunCreateResponse", AIAgentRunSerializer()
+            "AITaskPricingSessionListResponse",
+            AITaskPricingSessionSerializer(many=True),
         ),
     ),
     retrieve=extend_schema(
         tags=["AI"],
-        summary="获取单个 Agent 运行记录",
+        summary="获取任务定价会话详情",
         responses=api_envelope_serializer(
-            "AIAgentRunDetailResponse", AIAgentRunSerializer()
+            "AITaskPricingSessionDetailResponse", AITaskPricingSessionSerializer()
         ),
     ),
+    create=extend_schema(
+        tags=["AI"],
+        summary="创建任务定价会话",
+        description="提交任务草稿，AI 读取用户画像和全局任务定价标准后生成初步定价，等待前端反馈。",
+        request=AITaskPricingSessionCreateSerializer,
+        responses=api_envelope_serializer(
+            "AITaskPricingSessionCreateResponse", AITaskPricingSessionSerializer()
+        ),
+        examples=[
+            OpenApiExample(
+                "创建一次性任务定价会话",
+                value={
+                    "task_payload": {
+                        "title": "完成数据库课程复习",
+                        "description": "整理索引、事务、范式相关笔记",
+                        "task_type": "one_time",
+                        "recurrence": "none",
+                        "settlement_track": "regular",
+                        "difficulty_level": "medium",
+                        "progress_target": 100,
+                        "tags": ["study", "database"],
+                    }
+                },
+                request_only=True,
+            )
+        ],
+    ),
 )
-class AIAgentRunViewSet(ApiResponseMixin, viewsets.ModelViewSet):
+class AITaskPricingSessionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    serializer_class = AIAgentRunSerializer
-    queryset = AIAgentRun.objects.none()
+    serializer_class = AITaskPricingSessionSerializer
+    queryset = AITaskPricingSession.objects.none()
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        return AIAgentRun.objects.filter(owner=self.request.user)
+        return AITaskPricingSession.objects.filter(
+            owner=self.request.user
+        ).select_related("created_task")
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        serializer = AITaskPricingSessionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        agent_run = create_agent_run(
-            owner=request.user,
-            workflow_key=serializer.validated_data["workflow_key"],
-            input_payload=serializer.validated_data.get("input_payload", {}),
+        session = create_task_pricing_session(
+            user=request.user,
+            task_payload=serializer.validated_data["task_payload"],
         )
-        output = self.get_serializer(agent_run).data
         return api_response(
-            data=output,
-            message="创建 Agent 运行记录成功",
-            status_code=status.HTTP_201_CREATED,
+            data=self.get_serializer(session).data, message="任务定价会话已创建"
         )
 
     @extend_schema(
         tags=["AI"],
-        summary="执行一次 mock Agent 工作流",
-        request=AIAgentRunExecuteSerializer,
+        summary="反馈或接受任务定价",
+        description="action=revise 时根据偏高/偏低/详细说明重新定价；action=accept 时创建正式任务并更新用户动态画像。",
+        request=AITaskPricingFeedbackSerializer,
         responses=api_envelope_serializer(
-            "AIAgentRunExecuteResponse", AIAgentRunSerializer()
+            "AITaskPricingFeedbackResponse", AITaskPricingSessionSerializer()
         ),
     )
-    @action(detail=True, methods=["post"], url_path="execute")
-    def execute(self, request, pk=None):
-        agent_run = self.get_object()
-        serializer = AIAgentRunExecuteSerializer(data=request.data)
+    @action(detail=True, methods=["post"], url_path="feedback")
+    def feedback(self, request, pk=None):
+        serializer = AITaskPricingFeedbackSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if serializer.validated_data.get("input_payload"):
-            agent_run.input_payload = serializer.validated_data["input_payload"]
-            agent_run.save(update_fields=["input_payload", "updated_at"])
-        agent_run = execute_agent_run(agent_run=agent_run)
+        session = self.get_object()
+        if serializer.validated_data["action"] == "accept":
+            session = accept_task_pricing_session(session=session)
+            return api_response(
+                data=self.get_serializer(session).data,
+                message="任务定价已接受，任务已创建",
+            )
+
+        session = revise_task_pricing_session(
+            session=session,
+            feedback_direction=serializer.validated_data.get("feedback_direction", ""),
+            feedback_text=serializer.validated_data.get("feedback_text", ""),
+        )
         return api_response(
-            data=self.get_serializer(agent_run).data, message="执行 Agent 工作流成功"
+            data=self.get_serializer(session).data, message="任务定价已根据反馈调整"
         )

@@ -1,16 +1,24 @@
 from rest_framework.routers import DefaultRouter
 
-from django.urls import path
-
-from apps.ai.views import AIAgentRunViewSet, AIProviderConfigView, AgentWorkflowCatalogView, AIReportJobViewSet
+from apps.ai.views import AIReportJobViewSet, AITaskPricingSessionViewSet
 
 router = DefaultRouter()
 router.register("report-jobs", AIReportJobViewSet, basename="ai-report-job")
-router.register("agent-runs", AIAgentRunViewSet, basename="ai-agent-run")
+router.register(
+    "task-pricing-sessions",
+    AITaskPricingSessionViewSet,
+    basename="ai-task-pricing-session",
+)
 
 urlpatterns = [
-    path("workflows/catalog/", AgentWorkflowCatalogView.as_view(), name="ai-workflow-catalog"),
-    path("providers/current/", AIProviderConfigView.as_view(), name="ai-provider-config"),
+    path(
+        "workflows/catalog/",
+        AgentWorkflowCatalogView.as_view(),
+        name="ai-workflow-catalog",
+    ),
+    path(
+        "providers/current/", AIProviderConfigView.as_view(), name="ai-provider-config"
+    ),
 ]
 
 urlpatterns += router.urls

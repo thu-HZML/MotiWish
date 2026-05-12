@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from apps.ai.models import AIAgentRun, AIReportJob
+from apps.ai.models import AIReportJob, AITaskPricingSession
+from apps.tasks.serializers import TaskSerializer
 
 
 class AIReportJobSerializer(serializers.ModelSerializer):
@@ -10,40 +11,39 @@ class AIReportJobSerializer(serializers.ModelSerializer):
         read_only_fields = ("owner", "status", "summary", "result_payload")
 
 
-class AIAgentRunSerializer(serializers.ModelSerializer):
+class AITaskPricingSessionSerializer(serializers.ModelSerializer):
+    created_task = TaskSerializer(read_only=True)
+
     class Meta:
-        model = AIAgentRun
+        model = AITaskPricingSession
         fields = "__all__"
         read_only_fields = (
             "owner",
             "status",
-            "context_payload",
-            "state_payload",
-            "result_payload",
+            "profile_snapshot",
+            "pricing_standard_version",
+            "pricing_standard_excerpt",
+            "quote_payload",
+            "feedback_history",
+            "created_task",
+            "dynamic_profile_update",
             "error_message",
-            "trace_id",
-            "started_at",
-            "finished_at",
+            "created_at",
+            "updated_at",
         )
 
 
-class AIAgentRunExecuteSerializer(serializers.Serializer):
-    input_payload = serializers.JSONField(default=dict)
+class AITaskPricingSessionCreateSerializer(serializers.Serializer):
+    task_payload = serializers.JSONField()
 
 
-class AgentWorkflowDefinitionSerializer(serializers.Serializer):
-    key = serializers.CharField()
-    name = serializers.CharField()
-    description = serializers.CharField()
-    version = serializers.CharField()
-    entrypoint = serializers.CharField()
-    supports_streaming = serializers.BooleanField()
-
-
-class AIProviderConfigSerializer(serializers.Serializer):
-    provider = serializers.CharField()
-    model = serializers.CharField()
-    base_url = serializers.CharField(allow_blank=True, allow_null=True)
-    temperature = serializers.FloatField()
-    timeout = serializers.IntegerField()
-    max_retries = serializers.IntegerField()
+class AITaskPricingFeedbackSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("accept", "revise"))
+    feedback_direction = serializers.ChoiceField(
+        choices=("too_high", "too_low", "detail"),
+        required=False,
+        allow_blank=True,
+    )
+    feedback_text = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000
+    )
