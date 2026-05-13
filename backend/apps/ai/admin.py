@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.ai.models import AIAgentRun, AIReportJob, AITaskPricingSession
+from apps.ai.models import AIReportJob, AITaskPricingSession
 
 
 @admin.register(AIReportJob)

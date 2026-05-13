@@ -121,7 +121,7 @@ def _apply_feedback(reward: int, penalty: int, feedback_history: list[dict[str, 
 
 
 def _try_llm_refine_quote(state: TaskPricingState, baseline_quote: dict[str, Any]) -> dict[str, Any]:
-    if os.getenv("AI_PROVIDER", "mock") != "openai-compatible":
+    if os.getenv("AI_PROVIDER", "mock") not in {"openai-compatible", "openai"}:
         return baseline_quote
     if ChatOpenAI is None or not os.getenv("AI_API_KEY"):
         return baseline_quote

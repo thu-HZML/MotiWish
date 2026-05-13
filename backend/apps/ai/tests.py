@@ -1,5 +1,8 @@
+import os
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from unittest import skipUnless
 
 from apps.ai.models import AITaskPricingSession
 from apps.ai.services import (
@@ -94,3 +97,34 @@ class TaskPricingAssistantTests(TestCase):
         )
         self.assertEqual(task.pricing_status, PricingStatus.APPLIED)
         self.assertEqual(dynamic_profile.current_top_goal, "完成数据库课程复习")
+
+
+@skipUnless(
+    os.getenv("AI_PROVIDER") in {"openai-compatible", "openai"} and bool(os.getenv("AI_API_KEY")),
+    "需要在 backend/.env 中配置 AI_PROVIDER=openai-compatible 或 openai，并配置 AI_API_KEY 才运行真实模型 smoke test",
+)
+class TaskPricingLiveModelSmokeTest(TestCase):
+    def test_task_pricing_uses_live_model(self):
+        user = get_user_model().objects.create_user(
+            username="live_pricing_user",
+            email="live_pricing@example.com",
+            password="Password123!",
+        )
+        session = create_task_pricing_session(
+            user=user,
+            task_payload={
+                "title": "完成 30 分钟英语听力训练",
+                "description": "听一段材料并整理 5 个生词",
+                "task_type": "daily",
+                "recurrence": "daily",
+                "settlement_track": "regular",
+                "difficulty_level": "medium",
+                "progress_target": 100,
+                "tags": ["english", "listening"],
+            },
+        )
+        self.assertEqual(
+            session.quote_payload.get("llm_style_payload", {}).get("provider"),
+            "openai-compatible",
+            session.quote_payload.get("risk_notes"),
+        )
