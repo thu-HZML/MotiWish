@@ -1,11 +1,11 @@
 package com.example.motiwish.data.network
 
 import com.google.gson.annotations.SerializedName
-// 4. Retrofit 接口
+// Retrofit 接口
 import retrofit2.http.Body
 import retrofit2.http.POST
 
-// 1. 统一的响应包裹类
+// 响应包裹类
 data class ApiResponse<T>(
     val success: Boolean,
     val code: String,
@@ -13,17 +13,24 @@ data class ApiResponse<T>(
     val data: T?
 )
 
-// 2. 登录请求体
+// 登录请求体
 data class LoginRequest(
     val username: String,
     val password: String
 )
 
-// 3. 登录成功后的 Token 数据
+// 注册请求体：根据后端 OpenAPI 规范，最小注册必填项为用户名、邮箱和密码
+data class RegisterRequest(
+    val username: String,
+    val email: String,
+    val password: String
+)
+
+// 登录成功后的 Token 数据
 data class JWTToken(
     val access: String,
     val refresh: String,
-    val user: UserDto // 简化的用户对象，根据你的需要可扩展
+    val user: UserDto
 )
 
 data class UserDto(
@@ -38,4 +45,8 @@ data class UserDto(
 interface AuthApi {
     @POST("api/v1/users/auth/login/")
     suspend fun login(@Body request: LoginRequest): ApiResponse<JWTToken>
+
+    // 注册接口
+    @POST("api/v1/users/auth/register/")
+    suspend fun register(@Body request: RegisterRequest): ApiResponse<JWTToken>
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.network.AuthApi
 import com.example.motiwish.data.network.LoginRequest
+import com.example.motiwish.data.network.RegisterRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
     // 输入框状态
     var username = MutableStateFlow("")
     var password = MutableStateFlow("")
+    val email = MutableStateFlow("")
 
     // UI 状态
     private val _isLoading = MutableStateFlow(false)
@@ -24,6 +26,10 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
     // 页面展示状态：是否显示登录框 (启动页延时后变为 true)
     private val _showLoginPanel = MutableStateFlow(false)
     val showLoginPanel = _showLoginPanel.asStateFlow()
+
+    // 控制当前是登录还是注册模式（false为登录，true为注册）
+    private val _isRegisterMode = MutableStateFlow(false)
+    val isRegisterMode = _isRegisterMode.asStateFlow()
 
     // 用于向 UI 发送一次性事件 (如：登录成功导航、Snackbar 报错)
     private val _authEvent = MutableSharedFlow<AuthEvent>()
@@ -37,6 +43,14 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
             // 否则展示登录框：
             _showLoginPanel.value = true
         }
+    }
+
+    // 切换登录和注册模式
+    fun toggleMode() {
+        _isRegisterMode.value = !_isRegisterMode.value
+        // 切换模式时清空错误输入，提升体验
+        password.value = ""
+        email.value = ""
     }
 
     fun login() {
@@ -63,6 +77,37 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
                 }
             } catch (e: Exception) {
                 // 处理网络异常
+                _authEvent.emit(AuthEvent.ShowError("网络错误: ${e.message}"))
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun register() {
+        val currentUsername = username.value.trim()
+        val currentEmail = email.value.trim()
+        val currentPassword = password.value.trim()
+
+        if (currentUsername.isEmpty() || currentEmail.isEmpty() || currentPassword.isEmpty()) {
+            viewModelScope.launch { _authEvent.emit(AuthEvent.ShowError("请填写完整的注册信息")) }
+            return
+        }
+        if (currentPassword.length < 8) {
+            viewModelScope.launch { _authEvent.emit(AuthEvent.ShowError("密码长度至少为 8 位")) }
+            return
+        }
+
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val response = authApi.register(RegisterRequest(currentUsername, currentEmail, currentPassword))
+                if (response.success && response.data != null) {
+                    _authEvent.emit(AuthEvent.NavigateToMain)
+                } else {
+                    _authEvent.emit(AuthEvent.ShowError(response.message ?: "注册失败"))
+                }
+            } catch (e: Exception) {
                 _authEvent.emit(AuthEvent.ShowError("网络错误: ${e.message}"))
             } finally {
                 _isLoading.value = false
