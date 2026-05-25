@@ -9,6 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -23,8 +26,13 @@ import java.util.concurrent.TimeUnit
 
 // 图标导入
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
 import androidx.navigation.compose.currentBackStackEntryAsState
+
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import com.example.motiwish.data.network.AuthApi
 
 class MainActivity : ComponentActivity() {
 
@@ -32,6 +40,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var taskRepository: TaskRepository
     private lateinit var currencyRepository: CurrencyRepository
     private lateinit var wishRepository: WishRepository
+
+    private lateinit var authApi: AuthApi
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +51,12 @@ class MainActivity : ComponentActivity() {
         taskRepository = TaskRepository(database.taskDao())
         currencyRepository = CurrencyRepository(database.currencyDao())
         wishRepository = WishRepository(database.wishDao())
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("http://10.0.2.2:8000/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        authApi = retrofit.create(AuthApi::class.java)
 
         scheduleDailyReminder()
 
@@ -58,6 +74,15 @@ class MainActivity : ComponentActivity() {
                 val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
                 val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
 
+                val authViewModel: AuthViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return AuthViewModel(authApi) as T
+                        }
+                    }
+                )
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -69,10 +94,12 @@ class MainActivity : ComponentActivity() {
                                     containerColor = Color.White,
                                     tonalElevation = 0.dp
                                 ) {
-                                    // 【修改 1】：更新底栏项目为 3 个
+
                                     val items = listOf(
                                         Triple("tasks", "任务", Icons.Default.Checklist),
-                                        Triple("history", "日程", Icons.Default.Checklist),
+                                        Triple("history", "日程",
+                                            Icons.AutoMirrored.Filled.EventNote
+                                        ),
                                         Triple("store", "商城", Icons.Default.Store),
                                         Triple("profile", "我的", Icons.Default.Person)
                                     )
@@ -102,7 +129,12 @@ class MainActivity : ComponentActivity() {
                             startDestination = "splash",
                             modifier = Modifier.padding(innerPadding)
                         ) {
-                            composable("splash") { SplashScreen(navController) }
+                            composable("splash") {
+                                SplashAuthScreen(
+                                    navController = navController,
+                                    viewModel = authViewModel
+                                )
+                            }
 
                             composable("tasks") {
                                 TaskScreen(taskViewModel, navController)

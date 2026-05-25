@@ -1,41 +1,200 @@
 package com.example.motiwish.ui.screens
 
-import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.motiwish.R
-import kotlinx.coroutines.delay
+import com.example.motiwish.viewmodel.AuthViewModel
 
 @Composable
-fun SplashScreen(navController: NavController) {
-    // 延时 2 秒后跳转到主页
+fun SplashAuthScreen(
+    navController: NavController,
+    viewModel: AuthViewModel
+) {
+    val showLoginPanel by viewModel.showLoginPanel.collectAsState()
+    val isRegisterMode by viewModel.isRegisterMode.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+
+    val username by viewModel.username.collectAsState()
+    val password by viewModel.password.collectAsState()
+    val email by viewModel.email.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
     LaunchedEffect(Unit) {
-        delay(2000L)
-        navController.navigate("tasks") {
-            // 跳转后将过渡页从栈中销毁，防止按返回键退回
-            popUpTo("splash") { inclusive = true }
+        viewModel.authEvent.collect { event ->
+            when (event) {
+                is AuthViewModel.AuthEvent.NavigateToMain -> {
+                    navController.navigate("tasks") {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                }
+                is AuthViewModel.AuthEvent.ShowError -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+            }
         }
     }
 
-    // 绘制纯色背景和中间的图标
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.primary), // 背景颜色
-        contentAlignment = Alignment.Center
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = "App Logo",
-            modifier = Modifier.size(150.dp)
-        )
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.primary)
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            // 1. Logo 区域
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.offset(y = if (showLoginPanel) (-180).dp else 0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Logo",
+                    modifier = Modifier.size(80.dp),
+                    tint = Color.White
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "MotiWish",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // 2. 动态登录/注册卡片
+            AnimatedVisibility(
+                visible = showLoginPanel,
+                enter = fadeIn(animationSpec = tween(500)) + slideInVertically(
+                    initialOffsetY = { it / 2 },
+                    animationSpec = tween(500)
+                ),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 48.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // 动态标题
+                        Text(
+                            text = if (isRegisterMode) "创建新账号" else "欢迎回来",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // 用户名输入框
+                        OutlinedTextField(
+                            value = username,
+                            onValueChange = { viewModel.username.value = it },
+                            label = { Text("用户名") },
+                            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 邮箱输入框：仅在注册模式下可见，带展开动画
+                        AnimatedVisibility(
+                            visible = isRegisterMode,
+                            enter = fadeIn() + slideInVertically(initialOffsetY = { -it / 2 }),
+                            exit = fadeOut()
+                        ) {
+                            Column {
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { viewModel.email.value = it },
+                                    label = { Text("电子邮箱") },
+                                    leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+                        }
+
+                        // 密码输入框
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { viewModel.password.value = it },
+                            label = { Text("密码") },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        Spacer(modifier = Modifier.height(28.dp))
+
+                        // 主操作按钮（登录 或 注册）
+                        Button(
+                            onClick = {
+                                if (isRegisterMode) viewModel.register() else viewModel.login()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            enabled = !isLoading,
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = if (isRegisterMode) "注 册" else "登 录",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 切换模式按钮
+                        TextButton(onClick = { viewModel.toggleMode() }) {
+                            Text(
+                                text = if (isRegisterMode) "已有账号？立即登录" else "没有账号？切换到注册",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
