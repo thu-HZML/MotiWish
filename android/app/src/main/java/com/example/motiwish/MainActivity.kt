@@ -34,6 +34,11 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import com.example.motiwish.data.network.AuthApi
 
+import okhttp3.OkHttpClient
+import com.example.motiwish.data.network.TokenManager
+import com.example.motiwish.data.network.AuthInterceptor
+import com.example.motiwish.data.network.UserApi
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -43,20 +48,39 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var authApi: AuthApi
 
+    private lateinit var userViewModel: UserViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 初始化数据库和仓库 (保持不变)
+        // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
         taskRepository = TaskRepository(database.taskDao())
         currencyRepository = CurrencyRepository(database.currencyDao())
         wishRepository = WishRepository(database.wishDao())
 
+        // 初始化 Token 管理器
+        TokenManager.init(this)
+
+        // 创建 OkHttpClient 并添加 AuthInterceptor
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(AuthInterceptor())
+            .build()
+
         val retrofit = Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:8000/")
+            .baseUrl("http://8.147.57.94/")
+            .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
         authApi = retrofit.create(AuthApi::class.java)
+
+        // 【新增 3】创建 UserApi 和 UserViewModel
+        val userApi = retrofit.create(UserApi::class.java)
+        userViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return UserViewModel(userApi) as T
+            }
+        })[UserViewModel::class.java]
 
         scheduleDailyReminder()
 
@@ -155,7 +179,8 @@ class MainActivity : ComponentActivity() {
                                 ProfileScreen(
                                     navController = navController,
                                     currencyViewModel = currencyViewModel,
-                                    historyViewModel = historyViewModel
+                                    historyViewModel = historyViewModel,
+                                    userViewModel = userViewModel
                                 )
                             }
 

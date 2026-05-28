@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+import com.example.motiwish.data.network.TokenManager
+
 class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
 
     // 输入框状态
@@ -70,7 +72,7 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
                 if (response.success && response.data != null) {
                     val token = response.data.access
                     // TODO: 将 token 保存到 DataStore 或 SharedPreferences 中
-
+                    TokenManager.saveToken(response.data.access)
                     _authEvent.emit(AuthEvent.NavigateToMain)
                 } else {
                     _authEvent.emit(AuthEvent.ShowError(response.message ?: "登录失败"))
@@ -103,6 +105,7 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
             try {
                 val response = authApi.register(RegisterRequest(currentUsername, currentEmail, currentPassword))
                 if (response.success && response.data != null) {
+                    TokenManager.saveToken(response.data.access)
                     _authEvent.emit(AuthEvent.NavigateToMain)
                 } else {
                     _authEvent.emit(AuthEvent.ShowError(response.message ?: "注册失败"))
