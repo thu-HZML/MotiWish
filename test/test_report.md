@@ -36,7 +36,7 @@
 - [x] **PATCH** `/api/v1/tasks/tasks/{id}/` - 部分更新任务
 - [x] **POST** `/api/v1/tasks/tasks/{id}/complete/` - 完成并结算任务
 - [x] **POST** `/api/v1/tasks/tasks/{id}/pricing/apply/` - 应用任务定价结果
-- [ ] **POST** `/api/v1/tasks/tasks/{id}/pricing/request/` - 发起任务 AI 定价请求
+- [x] **POST** `/api/v1/tasks/tasks/{id}/pricing/request/` - 发起任务 AI 定价请求
 - [x] **POST** `/api/v1/tasks/tasks/pricing/preview/` - 预览任务定价请求载荷
 - [x] **GET** `/api/v1/tasks/tasks/history/` - 获取任务历史记录
 - [x] **GET** `/api/v1/tasks/tasks/today/` - 获取指定日期的任务实例
