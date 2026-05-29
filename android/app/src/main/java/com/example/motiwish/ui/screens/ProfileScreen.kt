@@ -121,7 +121,7 @@ fun ProfileScreen(
                 if (userProfile != null) {
                     // 显示昵称（如果没有昵称则显示用户名）
                     Text(
-                        text = userProfile?.display_nickname ?: userProfile?.username ?: "User",
+                        text = userProfile?.username ?: userProfile?.display_nickname ?: "User",
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold
                     )
