@@ -85,4 +85,12 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+
+    // Retrofit 网络请求库
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    // Retrofit 的 Gson 解析转换器
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // 加载图片工具
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

@@ -9,6 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -23,8 +26,18 @@ import java.util.concurrent.TimeUnit
 
 // 图标导入
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
 import androidx.navigation.compose.currentBackStackEntryAsState
+
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import com.example.motiwish.data.network.AuthApi
+
+import okhttp3.OkHttpClient
+import com.example.motiwish.data.network.TokenManager
+import com.example.motiwish.data.network.AuthInterceptor
+import com.example.motiwish.data.network.UserApi
 
 class MainActivity : ComponentActivity() {
 
@@ -33,14 +46,41 @@ class MainActivity : ComponentActivity() {
     private lateinit var currencyRepository: CurrencyRepository
     private lateinit var wishRepository: WishRepository
 
+    private lateinit var authApi: AuthApi
+
+    private lateinit var userViewModel: UserViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 初始化数据库和仓库 (保持不变)
+        // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
         taskRepository = TaskRepository(database.taskDao())
         currencyRepository = CurrencyRepository(database.currencyDao())
         wishRepository = WishRepository(database.wishDao())
+
+        // 初始化 Token 管理器
+        TokenManager.init(this)
+
+        // 创建 OkHttpClient 并添加 AuthInterceptor
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(AuthInterceptor())
+            .build()
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("http://8.147.57.94/")
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+        authApi = retrofit.create(AuthApi::class.java)
+
+        // 【新增 3】创建 UserApi 和 UserViewModel
+        val userApi = retrofit.create(UserApi::class.java)
+        userViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return UserViewModel(userApi) as T
+            }
+        })[UserViewModel::class.java]
 
         scheduleDailyReminder()
 
@@ -58,6 +98,15 @@ class MainActivity : ComponentActivity() {
                 val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
                 val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
 
+                val authViewModel: AuthViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        @Suppress("UNCHECKED_CAST")
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return AuthViewModel(authApi) as T
+                        }
+                    }
+                )
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -69,10 +118,12 @@ class MainActivity : ComponentActivity() {
                                     containerColor = Color.White,
                                     tonalElevation = 0.dp
                                 ) {
-                                    // 【修改 1】：更新底栏项目为 3 个
+
                                     val items = listOf(
                                         Triple("tasks", "任务", Icons.Default.Checklist),
-                                        Triple("history", "日程", Icons.Default.Checklist),
+                                        Triple("history", "日程",
+                                            Icons.AutoMirrored.Filled.EventNote
+                                        ),
                                         Triple("store", "商城", Icons.Default.Store),
                                         Triple("profile", "我的", Icons.Default.Person)
                                     )
@@ -102,7 +153,12 @@ class MainActivity : ComponentActivity() {
                             startDestination = "splash",
                             modifier = Modifier.padding(innerPadding)
                         ) {
-                            composable("splash") { SplashScreen(navController) }
+                            composable("splash") {
+                                SplashAuthScreen(
+                                    navController = navController,
+                                    viewModel = authViewModel
+                                )
+                            }
 
                             composable("tasks") {
                                 TaskScreen(taskViewModel, navController)
@@ -123,7 +179,8 @@ class MainActivity : ComponentActivity() {
                                 ProfileScreen(
                                     navController = navController,
                                     currencyViewModel = currencyViewModel,
-                                    historyViewModel = historyViewModel
+                                    historyViewModel = historyViewModel,
+                                    userViewModel = userViewModel
                                 )
                             }
 
