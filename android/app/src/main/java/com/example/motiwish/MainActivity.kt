@@ -65,10 +65,14 @@ class MainActivity : ComponentActivity() {
         // 创建 OkHttpClient 并添加 AuthInterceptor
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor())
+            .connectTimeout(30, TimeUnit.SECONDS) // 连接超时 30 秒
+            .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
+            .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("http://8.147.57.94/")
+            //.baseUrl("http://8.147.57.94/")
+            .baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

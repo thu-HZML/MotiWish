@@ -10,9 +10,15 @@ import kotlinx.coroutines.launch
 
 import android.content.Context
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+
+import android.util.Log
+import retrofit2.HttpException
 
 class UserViewModel(private val userApi: UserApi) : ViewModel() {
 
@@ -35,29 +41,32 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
     fun uploadAvatar(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                // 1. 将本地 Uri 解析为输入流并读取所有字节
+                // 1. 获取输入流并将其解码为 Bitmap
                 val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
+                val originalBitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
 
-                if (bytes != null) {
-                    // 2. 包装为 RequestBody (MIME 类型指定为 image/*)
-                    val requestBody = bytes.toRequestBody("image/*".toMediaTypeOrNull())
+                if (originalBitmap != null) {
+                    // 2. 将 Bitmap 进行 JPEG 压缩（80 的质量能大幅减小体积，且肉眼几乎看不出区别）
+                    val outputStream = ByteArrayOutputStream()
+                    originalBitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+                    val bytes = outputStream.toByteArray()
 
-                    // 3. 构建表单的 Part 字段，字段名必须为 "avatar"，后端通过扩展名解析格式
-                    val body = MultipartBody.Part.createFormData("avatar", "avatar.jpg", requestBody)
+                    // 3. 包装为 RequestBody，明确指定为 image/jpeg
+                    val requestBody = bytes.toRequestBody("image/jpeg".toMediaTypeOrNull())
 
-                    // 4. 发起请求
+                    // 4. 构建 Multipart 表单字段
+                    val body =
+                        MultipartBody.Part.createFormData("avatar", "avatar.jpg", requestBody)
+
+                    // 5. 发起网络请求
                     val response = userApi.updateAvatar(body)
                     if (response.success && response.data != null) {
-                        // 成功后，后端会返回更新后的完整用户信息（包含新的 avatar_url）
-                        // 直接覆盖本地状态，UI 会自动刷新头像！
                         _userProfile.value = response.data
                     }
                 }
             } catch (e: Exception) {
-                // 网络异常或文件读取异常处理
-                e.printStackTrace()
+                Log.e("MotiWish_Avatar", "上传异常: ${e.message}", e)
             }
         }
     }
