@@ -90,4 +90,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     // Retrofit 的 Gson 解析转换器
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // 加载图片工具
+    implementation("io.coil-kt:coil-compose:2.6.0")
 }

@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.CurrencyExchange
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,22 +26,46 @@ import androidx.navigation.NavController
 // 导入你的 ViewModel
 import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.HistoryViewModel
+import com.example.motiwish.viewmodel.UserViewModel
 
-import androidx.compose.material.icons.filled.CurrencyExchange
-import androidx.compose.material.icons.filled.Star
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 @Composable
 fun ProfileScreen(
     navController: NavController,
     currencyViewModel: CurrencyViewModel,
-    historyViewModel: HistoryViewModel
+    historyViewModel: HistoryViewModel,
+    userViewModel: UserViewModel
 ){
-    // 观察真实的数据状态 (修正了变量名和获取方式)
+    // 【修改点 1】：收集本地钱包状态，并同时收集远端 UserProfile 状态
     val balance by currencyViewModel.balance.collectAsStateWithLifecycle()
     val transactions by currencyViewModel.transactions.collectAsStateWithLifecycle()
+    val userProfile by userViewModel.userProfile.collectAsStateWithLifecycle()
 
     // 控制折叠状态
     var isExpanded by remember { mutableStateOf(false) }
+
+    // 获取上下文并注册照片选择器
+    val context = LocalContext.current
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        // 当用户选定图片返回时，uri 不为空，触发上传逻辑
+        if (uri != null) {
+            userViewModel.uploadAvatar(context, uri)
+        }
+    }
+
+    // 【修改点 2】：每次进入页面时，自动触发拉取最新用户信息（刷新经验、等级等）
+    LaunchedEffect(Unit) {
+        userViewModel.fetchUserProfile()
+    }
 
     Column(
         modifier = Modifier
@@ -54,31 +80,71 @@ fun ProfileScreen(
                 .padding(vertical = 24.dp)
         ) {
             Surface(
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier
+                    .size(80.dp)
+                    .clickable {
+                        // 点击拉起系统相册，只允许选择图片
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Avatar",
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxSize(),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                if (!userProfile?.avatar_url.isNullOrEmpty()) {
+                    // 后端有头像链接，使用 Coil 加载
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(userProfile?.avatar_url)
+                            .crossfade(true) // 开启淡入淡出动画
+                            .build(),
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop, // 居中裁剪填充整个圆形
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    // 后端无头像，展示默认占位图
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Default Avatar",
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxSize(),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
+
+            // 【修改点 3】：将原本写死的 "User" 替换为真实的动态数据判断
             Column {
-                Text(
-                    text = "User",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "MotiWish 探索者",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 14.sp
-                )
+                if (userProfile != null) {
+                    // 显示昵称（如果没有昵称则显示用户名）
+                    Text(
+                        text = userProfile?.display_nickname ?: userProfile?.username ?: "User",
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // 显示等级与经验进度
+                    Text(
+                        text = "Lv.${userProfile?.level ?: 1} | 经验: ${userProfile?.experience ?: 0}/${userProfile?.next_level_experience ?: 0}",
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                    // 显示个性签名
+                    Text(
+                        text = userProfile?.bio.takeIf { !it.isNullOrBlank() } ?: "这个人很懒，什么都没写",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 14.sp
+                    )
+                } else {
+                    // 数据还未请求回来时的加载状态
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("获取资料中...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
 
@@ -93,7 +159,9 @@ fun ProfileScreen(
         )
 
         Card(
-            modifier = Modifier.fillMaxWidth().animateContentSize(), // 添加尺寸变换动画
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(), // 添加尺寸变换动画
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -101,7 +169,6 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                    // 直接从 CurrencyBalance 对象读取数据 (修正了循环读取的错误)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("一级货币", fontSize = 12.sp)
                         Text("${balance?.primaryCurrency ?: 0}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
@@ -124,26 +191,21 @@ fun ProfileScreen(
                 if (isExpanded) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                     LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                        // 使用 transactions 并读取正确的属性 (修正了属性名称)
                         items(transactions.take(10)) { transaction ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 6.dp), // 稍微增加一点上下间距
+                                    .padding(vertical = 6.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically // 确保左右居中对齐
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 左侧：交易来源
                                 Text(
                                     text = transaction.source,
                                     fontSize = 14.sp,
-                                    modifier = Modifier.weight(1f) // 让文字占据多余空间，防止长文本顶到右边
+                                    modifier = Modifier.weight(1f)
                                 )
 
-                                // 右侧：图标 + 金额
                                 val isIncome = transaction.type == "INCOME"
-                                // 根据数据库里存的 currencyType 决定图标和颜色
-                                // (假设你存的是 PRIMARY/SECONDARY 或包含 一级/二级 字眼，请根据你的 Repository 实际写入的字符串调整)
                                 val isPrimary = transaction.currencyType.contains("PRIMARY", ignoreCase = true)
                                         || transaction.currencyType.contains("一级")
 
@@ -151,12 +213,14 @@ fun ProfileScreen(
                                     Icon(
                                         imageVector = if (isPrimary) Icons.Default.CurrencyExchange else Icons.Default.Star,
                                         contentDescription = null,
-                                        modifier = Modifier.size(16.dp).padding(end = 4.dp),
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .padding(end = 4.dp),
                                         tint = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                                     )
                                     Text(
                                         text = "${if (isIncome) "+" else "-"}${transaction.amount}",
-                                        color = if (isIncome) Color(0xFF388E3C) else Color(0xFFD32F2F), // 使用稍微柔和一点的红绿色
+                                        color = if (isIncome) Color(0xFF388E3C) else Color(0xFFD32F2F),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     )
@@ -178,6 +242,24 @@ fun ProfileScreen(
             onClick = { navController.navigate("history") }
         )
 
+        // 【修改点 4】：使用 Spacer 把退出登录按钮推到屏幕最底部，并使用醒目的错误色（红色）
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = {
+                userViewModel.logout()
+                navController.navigate("splash") {
+                    // 清空整个路由栈，防止按返回键回到应用内
+                    popUpTo(navController.graph.id) { inclusive = true }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+        ) {
+            Text("退出登录", fontWeight = FontWeight.Bold)
+        }
     }
 }
 
