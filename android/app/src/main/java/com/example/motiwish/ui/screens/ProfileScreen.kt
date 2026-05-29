@@ -28,6 +28,14 @@ import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.HistoryViewModel
 import com.example.motiwish.viewmodel.UserViewModel
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+
 @Composable
 fun ProfileScreen(
     navController: NavController,
@@ -42,6 +50,17 @@ fun ProfileScreen(
 
     // 控制折叠状态
     var isExpanded by remember { mutableStateOf(false) }
+
+    // 获取上下文并注册照片选择器
+    val context = LocalContext.current
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        // 当用户选定图片返回时，uri 不为空，触发上传逻辑
+        if (uri != null) {
+            userViewModel.uploadAvatar(context, uri)
+        }
+    }
 
     // 【修改点 2】：每次进入页面时，自动触发拉取最新用户信息（刷新经验、等级等）
     LaunchedEffect(Unit) {
@@ -61,19 +80,39 @@ fun ProfileScreen(
                 .padding(vertical = 24.dp)
         ) {
             Surface(
-                modifier = Modifier.size(80.dp),
+                modifier = Modifier
+                    .size(80.dp)
+                    .clickable {
+                        // 点击拉起系统相册，只允许选择图片
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
-                // 如果后端有头像，这里以后可以换成 AsyncImage 加载网络图片
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Avatar",
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxSize(),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                if (!userProfile?.avatar_url.isNullOrEmpty()) {
+                    // 后端有头像链接，使用 Coil 加载
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(userProfile?.avatar_url)
+                            .crossfade(true) // 开启淡入淡出动画
+                            .build(),
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop, // 居中裁剪填充整个圆形
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    // 后端无头像，展示默认占位图
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Default Avatar",
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxSize(),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(16.dp))
 
