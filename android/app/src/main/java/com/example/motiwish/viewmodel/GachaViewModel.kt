@@ -1,64 +1,72 @@
 package com.example.motiwish.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import com.example.motiwish.data.network.GachaApi
+import com.example.motiwish.data.network.GachaDrawRequest
 import com.example.motiwish.data.repository.CurrencyRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.launch
-import kotlin.random.Random
 
-class GachaViewModel(private val currencyRepository: CurrencyRepository) : ViewModel() {
+class GachaViewModel(
+    private val gachaApi: GachaApi, // 新增了 API 依赖
+    private val currencyRepository: CurrencyRepository
+) : ViewModel() {
+
     private val _uiMessage = MutableSharedFlow<String>()
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
 
-    // 将参数改为抽卡次数 (times)
+    // 假设当前上架的常驻卡池 ID 是 1 (后续可从 /pools/ 接口动态获取)
+    private val currentPoolId = 1
+
     suspend fun draw(times: Int): Boolean {
-        val totalCost = times * 10
-        if (!currencyRepository.deductPrimaryCurrency(totalCost, "抽卡消费 - ${times}连")) {
-            _uiMessage.emit("一级货币不足，快去完成任务吧！")
+        try {
+            // 1. 发起网络请求，让后端服务器执行真实抽卡并扣费
+            val response = gachaApi.draw(currentPoolId, GachaDrawRequest(times))
+
+            if (response.success && response.data != null) {
+                val records = response.data
+
+                // 2. 统计总收益和本次抽卡的最高稀有度
+                var totalEarned = 0
+                var hasLegendary = false
+                var hasEpic = false
+                var hasRare = false
+
+                records.forEach { record ->
+                    totalEarned += record.reward_secondary
+                    when (record.reward_tier) {
+                        "legendary" -> hasLegendary = true
+                        "epic" -> hasEpic = true
+                        "rare" -> hasRare = true
+                    }
+                }
+
+                // 3. 【极其重要】触发钱包刷新！
+                // 因为后端已经扣了一级货币，发了二级货币，我们要让顶部的余额 UI 更新
+                currencyRepository.refreshWalletFromServer()
+
+                // 4. 根据真实抽卡结果定制文案
+                val message = when {
+                    times >= 10 -> "✨ 十连祈愿完成！共获得 ${totalEarned} 二级货币 ✨"
+                    hasLegendary -> "✨ 欧气爆发！单抽大暴击，获得 ${totalEarned} 二级货币 ✨"
+                    hasEpic -> "⭐ 暴击！获得 ${totalEarned} 二级货币 ⭐"
+                    hasRare -> "🌟 小暴击！获得 ${totalEarned} 二级货币 🌟"
+                    else -> "获得 ${totalEarned} 二级货币"
+                }
+
+                _uiMessage.emit(message)
+                return true
+            } else {
+                // 如果后端返回失败 (通常是因为 400 Bad Request, 一级货币余额不足)
+                // 后端会返回具体的 message，比如 "余额不足"
+                _uiMessage.emit(response.message ?: "抽卡失败，请检查余额")
+                return false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            _uiMessage.emit("网络异常，祈愿失败")
             return false
         }
-
-        var totalEarned = 0
-        var highestMultiplier = 1.0
-
-        // 独立计算每一次抽卡
-        for (i in 1..times) {
-            var random = Random.nextDouble()
-
-            // 十连保底机制：如果是十连抽的最后一次，且之前没有触发过3倍及以上暴击
-            if (times >= 10 && i == times && highestMultiplier < 3.0) {
-                random = 0.1 // 强制进入 3倍 概率区间
-            }
-
-            val multiplier = when {
-                random < 0.05 -> 5.0
-                random < 0.15 -> 3.0
-                random < 0.35 -> 2.0
-                else -> 1.0
-            }
-
-            if (multiplier > highestMultiplier) {
-                highestMultiplier = multiplier
-            }
-
-            totalEarned += (50 * multiplier).toInt()
-        }
-
-        currencyRepository.addSecondaryCurrency(totalEarned, "抽卡获得")
-
-        // 根据最高倍率和抽卡次数定制文案
-        val message = when {
-            times >= 10 -> "✨ 十连祈愿完成！共获得 ${totalEarned} 二级货币 ✨"
-            highestMultiplier == 5.0 -> "✨ 欧气爆发！单抽大暴击，获得 ${totalEarned} 二级货币 ✨"
-            highestMultiplier == 3.0 -> "⭐ 暴击！获得 ${totalEarned} 二级货币 ⭐"
-            highestMultiplier == 2.0 -> "🌟 小暴击！获得 ${totalEarned} 二级货币 🌟"
-            else -> "获得 ${totalEarned} 二级货币"
-        }
-
-        _uiMessage.emit(message)
-        return true
     }
 }

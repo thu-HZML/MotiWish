@@ -3,6 +3,8 @@ package com.example.motiwish.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.model.*
+import com.example.motiwish.data.network.TaskApi // 新增
+import com.example.motiwish.data.network.TaskCompleteRequest // 新增
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.TaskRepository
 import kotlinx.coroutines.flow.*
@@ -14,7 +16,8 @@ import java.time.temporal.ChronoUnit
 
 class TaskViewModel(
     private val taskRepository: TaskRepository,
-    private val currencyRepository: CurrencyRepository
+    private val currencyRepository: CurrencyRepository,
+    private val taskApi: TaskApi // 新增网络依赖
 ) : ViewModel() {
     private val _todayMetric = MutableStateFlow<DailyMetric?>(null)
     val todayMetric: StateFlow<DailyMetric?> = _todayMetric
@@ -89,6 +92,8 @@ class TaskViewModel(
         }
     }
 
+    // 【修改点】：目前后端的 OpenAPI 文档中没有专门结算 DailyMetric 的端点，
+    // 这里我们先暂时仅做本地评估，或者通过通知服务器完成特定任务（需要跟后端确认）
     fun evaluateDailyMetric() {
         viewModelScope.launch {
             val metric = _todayMetric.value ?: return@launch
@@ -96,31 +101,17 @@ class TaskViewModel(
                 _uiMessage.emit("今日日常任务已经评估过了")
                 return@launch
             }
-            var reward = 0
-            val wakeTime = LocalTime.parse(metric.wakeUpTime)
-            if (wakeTime.isBefore(LocalTime.of(8, 0))) reward += 10
-            val sleepTime = LocalTime.parse(metric.sleepTime)
-            if (sleepTime.isBefore(LocalTime.of(23, 0))) reward += 10
-            if (metric.phoneUsageMinutes <= 300) reward += 15
-            else if (metric.phoneUsageMinutes > 500) reward -= 5
-            if (metric.waterCups >= 8) reward += 15
-            else if (metric.waterCups < 4) reward -= 5
-            metric.reward = reward
+
+            // 提醒：在真正的联机状态下，这里的奖惩逻辑应交由服务器的 /ai/report-jobs/ 或专用端点处理
+            // 这里仅做 UI 提示，不再调用已经不存在的 addPrimaryCurrency
+            _uiMessage.emit("日常记录已保存，等待服务器统一结算。")
             metric.evaluated = true
             taskRepository.saveDailyMetric(metric)
-            if (reward > 0) {
-                currencyRepository.addPrimaryCurrency(reward, "日常任务奖励")
-                _uiMessage.emit("获得 $reward 一级货币！")
-            } else if (reward < 0) {
-                currencyRepository.deductPrimaryCurrency(-reward, "日常任务惩罚")
-                _uiMessage.emit("被扣除 ${-reward} 一级货币")
-            } else {
-                _uiMessage.emit("日常任务完成，无奖惩")
-            }
             _todayMetric.value = metric
         }
     }
 
+    // 【修改点】：调用网络接口完成任务
     fun completePeriodicTask(task: PeriodicTask) {
         viewModelScope.launch {
             val today = LocalDate.now()
@@ -128,10 +119,23 @@ class TaskViewModel(
                 _uiMessage.emit("今日已完成此任务")
                 return@launch
             }
-            taskRepository.completePeriodicTask(task.id, today, task.rewardAmount)
-            currencyRepository.addPrimaryCurrency(task.rewardAmount, "周期任务奖励")
-            _uiMessage.emit("完成周期任务，获得 ${task.rewardAmount} 一级货币")
-            loadTodaysPeriodicTasks()
+
+            try {
+                // 1. 发送给服务器进行真实结算
+                val response = taskApi.completeTask(task.id, TaskCompleteRequest())
+
+                if (response.success) {
+                    // 2. 更新本地状态并刷新服务器钱包
+                    taskRepository.completePeriodicTask(task.id, today, task.rewardAmount)
+                    currencyRepository.refreshWalletFromServer()
+                    _uiMessage.emit("完成周期任务！")
+                    loadTodaysPeriodicTasks()
+                } else {
+                    _uiMessage.emit(response.message ?: "任务提交失败")
+                }
+            } catch (e: Exception) {
+                _uiMessage.emit("网络连接失败，请稍后重试")
+            }
         }
     }
 
@@ -167,6 +171,7 @@ class TaskViewModel(
         }
     }
 
+    // 【修改点】：调用网络接口完成一次性任务
     fun evaluateOneShotTask(taskId: Int) {
         viewModelScope.launch {
             val task = taskRepository.getOneShotTaskById(taskId) ?: return@launch
@@ -174,27 +179,34 @@ class TaskViewModel(
                 _uiMessage.emit("任务已评估过")
                 return@launch
             }
-            val now = LocalDateTime.now()
+
             val isCompleted = task.progress >= 100
-            val isOverdue = now.isAfter(task.deadline)
-            var reward = 0
-            var penalty = 0
+
             if (isCompleted) {
-                task.status = "COMPLETED"
-                val hoursEarly = if (!isOverdue) ChronoUnit.HOURS.between(now, task.deadline).coerceAtLeast(0) else 0
-                reward = (50 + hoursEarly / 2).toInt().coerceAtMost(200)
-                currencyRepository.addPrimaryCurrency(reward, "一次性任务奖励")
-                _uiMessage.emit("任务完成！获得 $reward 一级货币")
-            } else if (isOverdue && task.progress < 100) {
-                task.status = "FAILED"
-                penalty = 30
-                currencyRepository.deductPrimaryCurrency(penalty, "一次性任务失败惩罚")
-                _uiMessage.emit("任务超时未完成，扣除 $penalty 一级货币")
+                try {
+                    val response = taskApi.completeTask(task.id, TaskCompleteRequest())
+                    if (response.success) {
+                        task.status = "COMPLETED"
+                        task.evaluated = true
+                        taskRepository.updateOneShotTask(task)
+                        currencyRepository.refreshWalletFromServer()
+                        _uiMessage.emit("任务完成！")
+                    } else {
+                        _uiMessage.emit(response.message ?: "提交失败")
+                    }
+                } catch (e: Exception) {
+                    _uiMessage.emit("网络连接失败，请稍后重试")
+                }
+            } else {
+                val now = LocalDateTime.now()
+                val isOverdue = now.isAfter(task.deadline)
+                if (isOverdue) {
+                    task.status = "FAILED"
+                    task.evaluated = true
+                    taskRepository.updateOneShotTask(task)
+                    _uiMessage.emit("任务超时已失败，等待服务器结算。")
+                }
             }
-            task.reward = reward
-            task.penalty = penalty
-            task.evaluated = true
-            taskRepository.updateOneShotTask(task)
         }
     }
 

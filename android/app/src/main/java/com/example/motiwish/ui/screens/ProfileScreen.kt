@@ -65,6 +65,7 @@ fun ProfileScreen(
     // 【修改点 2】：每次进入页面时，自动触发拉取最新用户信息（刷新经验、等级等）
     LaunchedEffect(Unit) {
         userViewModel.fetchUserProfile()
+        currencyViewModel.refreshWallet()
     }
 
     Column(
@@ -237,9 +238,9 @@ fun ProfileScreen(
         // 历史记录入口
         ProfileMenuItem(
             icon = { Icon(Icons.Default.History, contentDescription = null) },
-            title = "历史记录",
-            subtitle = "查看过往任务与成就",
-            onClick = { navController.navigate("history") }
+            title = "兑换历史",
+            subtitle = "查看过往的愿望奖励与道具",
+            onClick = { navController.navigate("redemption_history") }
         )
 
         // 【修改点 4】：使用 Spacer 把退出登录按钮推到屏幕最底部，并使用醒目的错误色（红色）

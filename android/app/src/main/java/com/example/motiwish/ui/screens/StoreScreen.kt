@@ -35,6 +35,10 @@ fun StoreScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(Unit) {
+        currencyViewModel.refreshWallet()
+    }
+
     // 监听两个 ViewModel 的消息
     LaunchedEffect(Unit) {
         launch {

@@ -3,6 +3,7 @@ package com.example.motiwish.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.model.Wish
+import com.example.motiwish.data.network.ShopApi // 新增
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.WishRepository
 import kotlinx.coroutines.flow.*
@@ -10,7 +11,8 @@ import kotlinx.coroutines.launch
 
 class ShopViewModel(
     private val wishRepository: WishRepository,
-    private val currencyRepository: CurrencyRepository
+    private val currencyRepository: CurrencyRepository,
+    private val shopApi: ShopApi // 新增网络依赖
 ) : ViewModel() {
     private val _wishes = MutableStateFlow<List<Wish>>(emptyList())
     val wishes: StateFlow<List<Wish>> = _wishes
@@ -18,24 +20,27 @@ class ShopViewModel(
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
 
     init {
-        loadWishes()
-        maybeAddSystemWishes()
+        fetchRealShopItems()
     }
-
-    private fun loadWishes() {
-        wishRepository.getAllEnabledWishes().onEach { _wishes.value = it }.launchIn(viewModelScope)
-    }
-
-    private fun maybeAddSystemWishes() {
+    fun fetchRealShopItems() {
         viewModelScope.launch {
-            if (_wishes.value.isEmpty()) {
-                val systemWishes = listOf(
-                    Wish(name ="周末电影票", costSecondary = 100, isSystem = true, custom = false),
-                    Wish(name = "新书一本", costSecondary = 80, isSystem = true, custom = false),
-                    Wish(name = "咖啡券", costSecondary = 50, isSystem = true, custom = false),
-                    Wish(name = "游戏皮肤", costSecondary = 200, isSystem = true, custom = false)
-                )
-                systemWishes.forEach { wishRepository.addWish(it) }
+            try {
+                val response = shopApi.getShopItems()
+                if (response.success && response.data != null) {
+                    // 把服务器的 NetworkShopItem 转换成你 UI 用的 Wish 类
+                    val realWishes = response.data.results.map { networkItem ->
+                        Wish(
+                            id = networkItem.id, // 【极其关键】：一定要用服务器的 ID！
+                            name = networkItem.title,
+                            costSecondary = networkItem.price_secondary,
+                            isSystem = true,
+                            custom = false
+                        )
+                    }
+                    _wishes.value = realWishes
+                }
+            } catch (e: Exception) {
+                _uiMessage.emit("获取商店列表失败，请检查网络")
             }
         }
     }
@@ -58,13 +63,23 @@ class ShopViewModel(
         }
     }
 
+    // 【修改点】：使用服务器接口购买愿望
     suspend fun purchaseWish(wish: Wish): Boolean {
-        if (currencyRepository.deductSecondaryCurrency(wish.costSecondary, "兑换愿望: ${wish.name}")) {
-            wishRepository.disableWish(wish.id)
-            _uiMessage.emit("成功兑换 ${wish.name}！")
-            return true
-        } else {
-            _uiMessage.emit("二级货币不足")
+        try {
+            val response = shopApi.redeemItem(wish.id)
+            if (response.success) {
+                // 兑换成功，刷新钱包
+                currencyRepository.refreshWalletFromServer()
+                _uiMessage.emit("成功兑换 ${wish.name}！")
+                // 兑换完最好重新拉取一下商品列表，刷新库存状态
+                fetchRealShopItems()
+                return true
+            } else {
+                _uiMessage.emit("兑换失败: ${response.message}")
+                return false
+            }
+        } catch (e: Exception) {
+            _uiMessage.emit("网络异常，兑换失败")
             return false
         }
     }

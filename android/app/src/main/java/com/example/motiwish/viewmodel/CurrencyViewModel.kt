@@ -19,9 +19,15 @@ class CurrencyViewModel(private val currencyRepository: CurrencyRepository) : Vi
         currencyRepository.getAllTransactions().onEach { _transactions.value = it }.launchIn(viewModelScope)
     }
 
-    fun addMockCurrency() {
+    //fun addMockCurrency() {
+    //    viewModelScope.launch {
+    //        currencyRepository.addPrimaryCurrency(100, "模拟充值（测试）")
+    //    }
+    //}
+
+    fun refreshWallet() {
         viewModelScope.launch {
-            currencyRepository.addPrimaryCurrency(100, "模拟充值（测试）")
+            currencyRepository.refreshWalletFromServer()
         }
     }
 }
