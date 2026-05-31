@@ -1,8 +1,13 @@
+
 import pytest
 import requests
 import uuid
+import urllib3  # 新增
 
-BASE_URL = "http://8.147.57.94/api/v1"
+# 禁用因为忽略证书校验而产生的控制台烦人警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+BASE_URL = "https://8.147.57.94/api/v1"
 
 STATE = {
     "wish_item_id": None,          
@@ -14,6 +19,7 @@ STATE = {
 @pytest.fixture(scope="module")
 def api():
     session = requests.Session()
+    session.verify = False  # 关键修复：全局关闭此 Session 的 SSL 证书验证！
     user_data = {
         "username": f"shop_tester_{uuid.uuid4().hex[:8]}",
         "email": f"shop_{uuid.uuid4().hex[:8]}@example.com",

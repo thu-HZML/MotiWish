@@ -1,9 +1,14 @@
+
 import pytest
 import requests
 import uuid
 import datetime
+import urllib3  # 新增
 
-BASE_URL = "http://8.147.57.94/api/v1"
+# 禁用因为忽略证书校验而产生的控制台烦人警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+BASE_URL = "https://8.147.57.94/api/v1"
 
 # 全局状态字典，用于在步骤间传递数据
 STATE = {
@@ -15,19 +20,18 @@ STATE = {
 def api():
     """初始化测试环境：注册新用户、登录并获取 Token"""
     session = requests.Session()
+    session.verify = False  # 关键修复：全局关闭此 Session 的 SSL 证书验证！
     user_data = {
         "username": f"gacha_tester_{uuid.uuid4().hex[:8]}",
         "email": f"gacha_{uuid.uuid4().hex[:8]}@example.com",
         "password": "Password123!",
         "nickname": "抽卡欧皇"
     }
-    
     # 1. 注册
     reg_res = session.post(f"{BASE_URL}/users/auth/register/", json=user_data)
     assert reg_res.status_code in (200, 201), f"注册失败: {reg_res.text}"
     token = reg_res.json().get("data", {}).get("access")
     session.headers.update({"Authorization": f"Bearer {token}"})
-    
     return session
 
 

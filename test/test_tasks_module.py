@@ -1,9 +1,14 @@
+
 import pytest
 import requests
 import uuid
 import datetime
+import urllib3  # 新增
 
-BASE_URL = "http://8.147.57.94/api/v1"
+# 禁用因为忽略证书校验而产生的控制台烦人警告
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+BASE_URL = "https://8.147.57.94/api/v1"
 
 STATE = {
     "task_id": None
@@ -12,6 +17,7 @@ STATE = {
 @pytest.fixture(scope="module")
 def api():
     session = requests.Session()
+    session.verify = False  # 关键修复：全局关闭此 Session 的 SSL 证书验证！
     user_data = {
         "username": f"task_tester_{uuid.uuid4().hex[:8]}",
         "email": f"task_{uuid.uuid4().hex[:8]}@example.com",
@@ -20,7 +26,6 @@ def api():
     }
     reg_res = session.post(f"{BASE_URL}/users/auth/register/", json=user_data)
     assert reg_res.status_code in (200, 201)
-    
     token = reg_res.json().get("data", {}).get("access")
     session.headers.update({"Authorization": f"Bearer {token}"})
     return session
