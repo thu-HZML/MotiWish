@@ -21,6 +21,11 @@ fun CurrencyScreen(viewModel: CurrencyViewModel) {
     val balance by viewModel.balance.collectAsStateWithLifecycle()
     val transactions by viewModel.transactions.collectAsStateWithLifecycle()
 
+    // 每次进入这个独立页面时，自动触发一次云端刷新
+    LaunchedEffect(Unit) {
+        viewModel.refreshWallet()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -29,11 +34,13 @@ fun CurrencyScreen(viewModel: CurrencyViewModel) {
             )
         },
         floatingActionButton = {
+            // 【核心修改点】：把原本的“加钱”变成了“刷新”云端数据
             FloatingActionButton(
-                onClick = { viewModel.addMockCurrency() },
+                onClick = { viewModel.refreshWallet() },
                 containerColor = MaterialTheme.colorScheme.secondary
             ) {
-                Icon(Icons.Default.AttachMoney, contentDescription = "模拟充值")
+                // 图标换成了刷新图标
+                Icon(Icons.Default.Refresh, contentDescription = "刷新钱包")
             }
         }
     ) { paddingValues ->
@@ -96,9 +103,10 @@ fun CurrencyScreen(viewModel: CurrencyViewModel) {
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
+                        // 如果我们在 Repository 里转换正确，这里的显示也会自动变成绿色+或者红色-
                         Text(
                             "${if (transaction.type == "INCOME") "+" else "-"}${transaction.amount}",
-                            color = if (transaction.type == "INCOME") Color.Green else Color.Red,
+                            color = if (transaction.type == "INCOME") Color(0xFF388E3C) else Color(0xFFD32F2F), // 稍微柔和一点的红绿色
                             style = MaterialTheme.typography.titleMedium
                         )
                     }

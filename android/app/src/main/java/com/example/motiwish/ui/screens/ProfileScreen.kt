@@ -65,6 +65,7 @@ fun ProfileScreen(
     // 【修改点 2】：每次进入页面时，自动触发拉取最新用户信息（刷新经验、等级等）
     LaunchedEffect(Unit) {
         userViewModel.fetchUserProfile()
+        currencyViewModel.refreshWallet()
     }
 
     Column(
