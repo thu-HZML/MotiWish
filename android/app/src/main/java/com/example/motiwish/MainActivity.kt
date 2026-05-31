@@ -113,6 +113,12 @@ class MainActivity : ComponentActivity() {
             }
         })[TaskViewModel::class.java]
 
+        val redemptionHistoryViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return RedemptionHistoryViewModel(shopApi) as T
+            }
+        })[RedemptionHistoryViewModel::class.java]
+
         scheduleDailyReminder()
 
         setContent {
@@ -217,7 +223,16 @@ class MainActivity : ComponentActivity() {
 
                             // 这里的 history 路由保留，供个人主页跳转
                             composable("history") {
-                                HistoryScreen(historyViewModel)
+                                HistoryScreen(
+                                    viewModel = historyViewModel// 或者是 taskViewModel，取决于你原来是怎么写的
+                                )
+                            }
+
+                            composable("redemption_history") {
+                                RedemptionHistoryScreen(
+                                    navController = navController,
+                                    viewModel = redemptionHistoryViewModel
+                                )
                             }
 
                             composable(
