@@ -69,7 +69,10 @@ fun RedemptionHistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(records) { record ->
-                        RedemptionRecordCard(record)
+                        RedemptionRecordCard(
+                            record = record,
+                            onFulfillClick = { viewModel.fulfillRecord(record.id) }
+                        )
                     }
                 }
             }
@@ -78,20 +81,23 @@ fun RedemptionHistoryScreen(
 }
 
 @Composable
-fun RedemptionRecordCard(record: com.example.motiwish.data.network.NetworkRedemptionRecord) {
+fun RedemptionRecordCard(
+    record: com.example.motiwish.data.network.NetworkRedemptionRecord,
+    onFulfillClick: () -> Unit // 新增回调参数
+) {
     // 格式化时间
     val formattedTime = try {
-        ZonedDateTime.parse(record.created_at)
-            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        java.time.ZonedDateTime.parse(record.created_at)
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
     } catch (e: Exception) {
         "未知时间"
     }
 
     // 翻译状态并分配颜色
     val (statusText, statusColor) = when (record.status) {
-        "completed", "fulfilled" -> Pair("已获得", Color(0xFF388E3C)) // 绿色
-        "requested" -> Pair("处理中", Color(0xFFF57C00)) // 橙色
-        "rejected" -> Pair("已退回", Color(0xFFD32F2F)) // 红色
+        "completed", "fulfilled" -> Pair("已享受 🎉", Color(0xFF388E3C))
+        "requested" -> Pair("待去享受", Color(0xFFF57C00))
+        "rejected" -> Pair("已退回", Color(0xFFD32F2F))
         else -> Pair("未知状态", Color.Gray)
     }
 
@@ -100,40 +106,51 @@ fun RedemptionRecordCard(record: com.example.motiwish.data.network.NetworkRedemp
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = record.item.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = formattedTime,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = record.item.title,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = formattedTime,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "-${record.cost_secondary} 币",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = statusText,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = statusColor
+                    )
+                }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "-${record.cost_secondary} 币",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = statusText,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = statusColor
-                )
+
+            // 【新增交互】：如果是待处理状态，显示一个“去兑现”按钮
+            if (record.status == "requested") {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onFulfillClick,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("我已在现实中享受该愿望！")
+                }
             }
         }
     }

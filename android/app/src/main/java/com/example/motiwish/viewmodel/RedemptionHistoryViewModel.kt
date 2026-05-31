@@ -32,4 +32,19 @@ class RedemptionHistoryViewModel(private val shopApi: ShopApi) : ViewModel() {
             }
         }
     }
+
+    fun fulfillRecord(recordId: Int) {
+        viewModelScope.launch {
+            try {
+                // 调用后端的兑现接口
+                val response = shopApi.fulfillRedemption(recordId)
+                if (response.success) {
+                    // 兑现成功后，重新拉取一次历史记录，刷新列表状态
+                    fetchHistory()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 }

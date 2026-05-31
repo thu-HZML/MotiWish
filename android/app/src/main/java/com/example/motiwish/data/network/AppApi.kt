@@ -41,6 +41,11 @@ data class PaginatedRedemptions(
     val results: List<NetworkRedemptionRecord>
 )
 
+data class RedemptionActionRequest(
+    val note: String = "",
+    val refund: Boolean = false
+)
+
 interface ShopApi {
     @GET("api/v1/shop/items/")
     suspend fun getShopItems(): ApiResponse<PaginatedShopItems>
@@ -52,6 +57,12 @@ interface ShopApi {
     suspend fun redeemItem(
         @Path("id") itemId: Int
     ): ApiResponse<RedeemRecord>
+
+    @POST("api/v1/shop/redemptions/{id}/fulfill/")
+    suspend fun fulfillRedemption(
+        @Path("id") recordId: Int,
+        @Body request: RedemptionActionRequest = RedemptionActionRequest()
+    ): ApiResponse<NetworkRedemptionRecord>
 }
 
 
