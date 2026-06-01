@@ -7,7 +7,6 @@ paths:
   /api/v1/ai/report-jobs/:
     get:
       operationId: ai_report_jobs_list
-      description: 返回当前用户创建的 AI 报告任务列表，适合 AI 页或历史报告页使用。
       summary: 获取 AI 报告任务列表
       parameters:
       - name: page
@@ -29,7 +28,6 @@ paths:
           description: ''
     post:
       operationId: ai_report_jobs_create
-      description: 创建一条 AI 报告生成任务，用于后续异步分析、总结或推荐。
       summary: 创建 AI 报告任务
       tags:
       - AI
@@ -38,15 +36,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AIReportJob'
-            examples:
-              创建周报任务:
-                value:
-                  report_type: weekly
-                  summary: 生成本周任务完成情况与建议
-                  status: pending
-                  input_payload:
-                    range: 2026-W18
-                  result_payload: {}
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/AIReportJob'
@@ -66,14 +55,13 @@ paths:
   /api/v1/ai/report-jobs/{id}/:
     get:
       operationId: ai_report_jobs_retrieve
-      description: 返回一条具体的 AI 报告任务详情，包括输入、状态和结果。
       summary: 获取单个 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
       - AI
@@ -88,17 +76,15 @@ paths:
           description: ''
     put:
       operationId: ai_report_jobs_update
-      description: 全量更新 AI 报告任务。
-      summary: 更新 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
-      - AI
+      - ai
       requestBody:
         content:
           application/json:
@@ -122,17 +108,15 @@ paths:
           description: ''
     patch:
       operationId: ai_report_jobs_partial_update
-      description: 部分更新 AI 报告任务，例如回填状态或结果摘要。
-      summary: 部分更新 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
-      - AI
+      - ai
       requestBody:
         content:
           application/json:
@@ -155,22 +139,196 @@ paths:
           description: ''
     delete:
       operationId: ai_report_jobs_destroy
-      description: 删除一条 AI 报告任务记录。
-      summary: 删除 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
+        required: true
+      tags:
+      - ai
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/ai/task-pricing-sessions/:
+    get:
+      operationId: ai_task_pricing_sessions_list
+      summary: 获取任务定价会话列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAITaskPricingSessionListResponseList'
+          description: ''
+    post:
+      operationId: ai_task_pricing_sessions_create
+      description: 前端提交任务草稿后，后端会读取用户画像和全局任务定价标准，返回 quote_payload。前端展示报价后，再调用 feedback
+        接口让用户接受或反馈。
+      summary: 创建任务定价会话
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+            examples:
+              一次性任务:
+                value:
+                  task_payload:
+                    title: 完成数据库课程复习
+                    description: 整理索引、事务、范式相关笔记
+                    task_type: one_time
+                    recurrence: none
+                    settlement_track: regular
+                    difficulty_level: medium
+                    progress_target: 100
+                    tags:
+                    - study
+                    - database
+              日常任务:
+                value:
+                  task_payload:
+                    title: 英语听力 30 分钟
+                    task_type: daily
+                    recurrence: daily
+                    settlement_track: regular
+                    difficulty_level: medium
+                    metric_key: study_minutes
+                    target_value: 30
+                    progress_target: 100
+                    tags:
+                    - english
+              每周周期任务:
+                value:
+                  task_payload:
+                    title: 每周健身 3 次
+                    task_type: recurring
+                    recurrence: weekly
+                    settlement_track: regular
+                    difficulty_level: medium
+                    weekdays:
+                    - 1
+                    - 3
+                    - 5
+                    progress_target: 100
+                    tags:
+                    - fitness
+              探索任务:
+                value:
+                  task_payload:
+                    title: 排查训练脚本问题
+                    task_type: one_time
+                    recurrence: none
+                    settlement_track: exploration
+                    difficulty_level: high
+                    estimated_focus_minutes: 180
+                    progress_target: 100
+                    tags:
+                    - coding
+                    - research
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingSessionCreateResponse'
+          description: ''
+  /api/v1/ai/task-pricing-sessions/{id}/:
+    get:
+      operationId: ai_task_pricing_sessions_retrieve
+      summary: 获取任务定价会话详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI任务定价会话.
         required: true
       tags:
       - AI
       security:
       - jwtAuth: []
       responses:
-        '204':
-          description: No response body
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingSessionDetailResponse'
+          description: ''
+  /api/v1/ai/task-pricing-sessions/{id}/feedback/:
+    post:
+      operationId: ai_task_pricing_sessions_feedback_create
+      description: action=revise 时根据偏高/偏低/详细说明重新定价；action=accept 时接受当前 quote_payload，创建正式任务，并更新用户动态画像。
+      summary: 反馈或接受任务定价
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI任务定价会话.
+        required: true
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+            examples:
+              接受当前定价:
+                value:
+                  action: accept
+              认为定价偏低:
+                value:
+                  action: revise
+                  feedback_direction: too_low
+                  feedback_text: 这个任务需要额外查资料，奖励可以再高一点。
+              详细反馈:
+                value:
+                  action: revise
+                  feedback_direction: detail
+                  feedback_text: 惩罚偏重，我最近压力比较大，希望失败成本轻一些。
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingFeedbackResponse'
+          description: ''
   /api/v1/common/health/:
     get:
       operationId: common_health_retrieve
@@ -1886,6 +2044,197 @@ components:
         * `pending` - 待生成
         * `done` - 已完成
         * `failed` - 失败
+    AITaskPricingFeedback:
+      type: object
+      properties:
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          description: |-
+            accept 表示接受当前定价并创建任务；revise 表示提交反馈并重新定价。
+
+            * `accept` - accept
+            * `revise` - revise
+        feedback_direction:
+          description: |-
+            revise 时可传：too_high 偏高；too_low 偏低；detail 详细说明。
+
+            * `too_high` - too_high
+            * `too_low` - too_low
+            * `detail` - detail
+          oneOf:
+          - $ref: '#/components/schemas/FeedbackDirectionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        feedback_text:
+          type: string
+          description: 用户对当前定价的自然语言反馈。
+          maxLength: 1000
+      required:
+      - action
+    AITaskPricingFeedbackResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_task:
+          allOf:
+          - $ref: '#/components/schemas/Task'
+          readOnly: true
+        quote_payload:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingQuotePayload'
+          readOnly: true
+          description: '当前 AI 定价结果。包含 reward_primary、penalty_primary、price_tier、confidence、reasoning、risk_notes、user_fit_notes、pricing_bounds
+            和 llm_style_payload。pricing_bounds 用于限制反馈调整范围，结构为 {reward_primary: {min,
+            max, recommended}, penalty_primary: {min, max, recommended}}。'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AITaskPricingSessionStatusEnum'
+          readOnly: true
+        task_payload:
+          title: 任务草稿
+        profile_snapshot:
+          readOnly: true
+          title: 用户画像快照
+        pricing_standard_version:
+          type: string
+          readOnly: true
+        pricing_standard_excerpt:
+          type: string
+          readOnly: true
+          title: 定价标准摘录
+        feedback_history:
+          readOnly: true
+          title: 反馈历史
+        dynamic_profile_update:
+          readOnly: true
+          title: 动态画像更新
+        error_message:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+      required:
+      - created_at
+      - created_task
+      - dynamic_profile_update
+      - error_message
+      - feedback_history
+      - id
+      - owner
+      - pricing_standard_excerpt
+      - pricing_standard_version
+      - profile_snapshot
+      - quote_payload
+      - status
+      - updated_at
+    AITaskPricingSessionCreate:
+      type: object
+      properties:
+        task_payload:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingDraft'
+          description: 待定价任务草稿。
+      required:
+      - task_payload
+    AITaskPricingSessionCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSessionDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSessionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSessionStatusEnum:
+      enum:
+      - waiting_feedback
+      - accepted
+      - cancelled
+      - failed
+      type: string
+      description: |-
+        * `waiting_feedback` - 等待反馈
+        * `accepted` - 已接受
+        * `cancelled` - 已取消
+        * `failed` - 失败
+    ActionEnum:
+      enum:
+      - accept
+      - revise
+      type: string
+      description: |-
+        * `accept` - accept
+        * `revise` - revise
     AvailableTimeLevelEnum:
       enum:
       - limited
@@ -2107,6 +2456,16 @@ components:
         * `working` - 已工作
         * `other` - 其他
         * `undisclosed` - 暂不填写
+    FeedbackDirectionEnum:
+      enum:
+      - too_high
+      - too_low
+      - detail
+      type: string
+      description: |-
+        * `too_high` - too_high
+        * `too_low` - too_low
+        * `detail` - detail
     FocusAreasEnum:
       enum:
       - exam
@@ -2698,6 +3057,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AIReportJobListResponse'
+    PaginatedAITaskPricingSessionListResponseList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AITaskPricingSessionListResponse'
     PaginatedGachaPoolListResponseList:
       type: object
       required:
@@ -3174,6 +3556,10 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        catalog_key:
+          type: string
+          title: 目录键
+          maxLength: 64
         title:
           type: string
           title: 商品名称
@@ -4271,6 +4657,137 @@ components:
       - data
       - message
       - success
+    TaskPricingBoundValue:
+      type: object
+      properties:
+        min:
+          type: integer
+          description: 当前任务建议范围下限。
+        max:
+          type: integer
+          description: 当前任务建议范围上限。
+        recommended:
+          type: integer
+          description: 本轮推荐值。
+      required:
+      - max
+      - min
+      - recommended
+    TaskPricingBounds:
+      type: object
+      properties:
+        reward_primary:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBoundValue'
+          description: 一级货币奖励建议范围。
+        penalty_primary:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBoundValue'
+          description: 失败惩罚建议范围。
+      required:
+      - penalty_primary
+      - reward_primary
+    TaskPricingDraft:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 任务标题。
+          maxLength: 120
+        description:
+          type: string
+          default: ''
+          description: 任务详细说明。
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          description: |-
+            任务类型：daily / recurring / one_time。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/RecurrenceEnum'
+          default: none
+          description: |-
+            重复规则：none / daily / weekly / monthly。
+
+            * `none` - 不重复
+            * `daily` - 每天
+            * `weekly` - 每周
+            * `monthly` - 每月
+        settlement_track:
+          allOf:
+          - $ref: '#/components/schemas/SettlementTrackEnum'
+          default: regular
+          description: |-
+            结算轨道：regular 常规轨道；exploration 探索轨道。
+
+            * `regular` - 常规轨道
+            * `exploration` - 探索轨道
+        difficulty_level:
+          allOf:
+          - $ref: '#/components/schemas/DifficultyLevelEnum'
+          default: medium
+          description: |-
+            难度：low / medium / high。
+
+            * `low` - 低
+            * `medium` - 中
+            * `high` - 高
+        estimated_focus_minutes:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 探索轨道必填，表示预计专注分钟数。
+        weekdays:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: weekly 任务使用，0=周一，6=周日。
+        month_days:
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: monthly 任务使用，例如 [1, 15, 28]。
+        metric_key:
+          type: string
+          default: ''
+          maxLength: 50
+        target_value:
+          type: integer
+          nullable: true
+        progress_target:
+          type: integer
+          minimum: 1
+          default: 100
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+        ai_metadata: {}
+      required:
+      - task_type
+      - title
     TaskPricingMeta:
       type: object
       properties:
@@ -4381,6 +4898,51 @@ components:
       - data
       - message
       - success
+    TaskPricingQuotePayload:
+      type: object
+      properties:
+        reward_primary:
+          type: integer
+          description: 本轮建议的一级货币奖励。
+        penalty_primary:
+          type: integer
+          description: 本轮建议的失败惩罚。
+        price_tier:
+          type: string
+          description: 定价档位，例如 small / medium。
+        confidence:
+          type: number
+          format: double
+          description: 报价置信度，0-1。
+        reasoning:
+          type: string
+          description: 展示给用户的定价理由。
+        risk_notes:
+          type: array
+          items:
+            type: string
+          description: 风险或缺失信息提示。
+        user_fit_notes:
+          type: array
+          items:
+            type: string
+          description: 结合用户画像或反馈生成的说明。
+        pricing_bounds:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBounds'
+          description: 反馈调整时使用的建议范围。
+        llm_style_payload:
+          description: 模型/规则辅助元数据。
+      required:
+      - confidence
+      - llm_style_payload
+      - penalty_primary
+      - price_tier
+      - pricing_bounds
+      - reasoning
+      - reward_primary
+      - risk_notes
+      - user_fit_notes
     TaskPricingRequestResponse:
       type: object
       properties:
@@ -4784,6 +5346,10 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        catalog_key:
+          type: string
+          title: 目录键
+          maxLength: 64
         title:
           type: string
           title: 商品名称
