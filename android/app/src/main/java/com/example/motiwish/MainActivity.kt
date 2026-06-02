@@ -1,5 +1,6 @@
 package com.example.motiwish
 
+import AuthInterceptor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,9 +38,16 @@ import com.example.motiwish.data.network.AuthApi
 
 import okhttp3.OkHttpClient
 import com.example.motiwish.data.network.TokenManager
-import com.example.motiwish.data.network.AuthInterceptor
 import com.example.motiwish.data.network.UserApi
 import com.example.motiwish.data.network.TaskApi
+import javax.net.ssl.TrustManager
+
+// 忽略证书验证
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+import com.example.motiwish.BuildConfig
 
 class MainActivity : ComponentActivity() {
 
@@ -52,6 +60,25 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var userViewModel: UserViewModel
 
+    // 辅助函数：仅用于调试，信任所有证书
+    private fun createUnsafeOkHttpClient(interceptor: AuthInterceptor): OkHttpClient {
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+        return OkHttpClient.Builder()
+            .addInterceptor(interceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -63,18 +90,32 @@ class MainActivity : ComponentActivity() {
 
         // 初始化 Token 管理器
         TokenManager.init(this)
-
+/*
         // 创建 OkHttpClient 并添加 AuthInterceptor
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS) // 连接超时 30 秒
             .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
             .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
+            .build()*/
+
+        // 忽略证书验证
+        val authInterceptor = AuthInterceptor()
+        val okHttpClient = if (BuildConfig.DEBUG) {
+            createUnsafeOkHttpClient(authInterceptor)
+        } else {
+            OkHttpClient.Builder()
+                .addInterceptor(authInterceptor)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build()
+        }
+
 
         val retrofit = Retrofit.Builder()
-            //.baseUrl("http://8.147.57.94/")
-            .baseUrl("http://127.0.0.1:8000/")
+            .baseUrl("https://8.147.57.94/")
+            //.baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
