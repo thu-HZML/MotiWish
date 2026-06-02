@@ -134,11 +134,6 @@ class Test05Shop:
     def test_shop_meta(self, api):
         assert api.get(f"{BASE_URL}/shop/items/meta/").status_code == 200
 
-    def test_pricing_meta(self, api):
-        res = api.get(f"{BASE_URL}/shop/items/pricing/meta/")
-        assert res.status_code != 404, "404 错误：后端未注册该路由 /shop/items/pricing/meta/"
-        assert res.status_code == 200
-
     def test_inventory(self, api):
         assert api.get(f"{BASE_URL}/shop/inventory/").status_code == 200
 

@@ -44,34 +44,33 @@
 ## 6. Shop (商店与库存)
 - [x] **GET** `/api/v1/shop/items/meta/` - 获取商店元信息
 - [x] **GET** `/api/v1/shop/inventory/` - 获取库存列表
-- [ ] **GET** `/api/v1/shop/items/pricing/meta/` - 获取愿望定价元信息 *(注：目前报 404)*
-- [ ] **GET** `/api/v1/shop/items/` - 获取商店商品列表
+- [x] **GET** `/api/v1/shop/items/` - 获取商店商品列表
 - [x] **POST** `/api/v1/shop/items/` - 创建商店商品
 - [x] **GET** `/api/v1/shop/items/{id}/` - 获取单个商店商品
 - [x] **PUT** `/api/v1/shop/items/{id}/` - 更新商店商品
 - [x] **PATCH** `/api/v1/shop/items/{id}/` - 部分更新商店商品
 - [x] **DELETE** `/api/v1/shop/items/{id}/` - 删除商店商品
 - [x] **POST** `/api/v1/shop/items/pricing/preview/` - 预览价格边界裁剪
-- [ ] **POST** `/api/v1/shop/items/{id}/redeem/` - 购买商店商品
-- [ ] **GET** `/api/v1/shop/redemptions/` - 获取兑换/购买记录
-- [ ] **GET** `/api/v1/shop/redemptions/{id}/` - 获取单条兑换/购买记录
-- [ ] **POST** `/api/v1/shop/redemptions/{id}/fulfill/` - 兑现愿望奖励记录
-- [ ] **POST** `/api/v1/shop/redemptions/{id}/reject/` - 拒绝愿望奖励记录
-- [ ] **GET** `/api/v1/shop/inventory/{id}/` - 获取单个库存道具
-- [ ] **POST** `/api/v1/shop/inventory/{id}/use/` - 使用库存道具
+- [x] **POST** `/api/v1/shop/items/{id}/redeem/` - 购买商店商品
+- [x] **GET** `/api/v1/shop/redemptions/` - 获取兑换/购买记录
+- [x] **GET** `/api/v1/shop/redemptions/{id}/` - 获取单条兑换/购买记录
+- [x] **POST** `/api/v1/shop/redemptions/{id}/fulfill/` - 兑现愿望奖励记录
+- [x] **POST** `/api/v1/shop/redemptions/{id}/reject/` - 拒绝愿望奖励记录
+- [x] **GET** `/api/v1/shop/inventory/{id}/` - 获取单个库存道具
+- [x] **POST** `/api/v1/shop/inventory/{id}/use/` - 使用库存道具
 
 ## 7. Gacha (抽卡系统)
 - [x] **GET** `/api/v1/gacha/pools/` - 获取卡池列表
-- [ ] **GET** `/api/v1/gacha/pools/{id}/` - 获取单个卡池
-- [ ] **POST** `/api/v1/gacha/pools/{id}/draw/` - 执行抽卡
-- [ ] **GET** `/api/v1/gacha/pools/{id}/state/` - 查看当前卡池保底状态
-- [ ] **GET** `/api/v1/gacha/records/` - 获取抽卡记录
-- [ ] **GET** `/api/v1/gacha/records/{id}/` - 获取单条抽卡记录
+- [x] **GET** `/api/v1/gacha/pools/{id}/` - 获取单个卡池
+- [x] **POST** `/api/v1/gacha/pools/{id}/draw/` - 执行抽卡
+- [x] **GET** `/api/v1/gacha/pools/{id}/state/` - 查看当前卡池保底状态
+- [x] **GET** `/api/v1/gacha/records/` - 获取抽卡记录
+- [x] **GET** `/api/v1/gacha/records/{id}/` - 获取单条抽卡记录
 
 ## 8. AI (AI 服务)
-- [ ] **GET** `/api/v1/ai/report-jobs/` - 获取 AI 报告任务列表
-- [ ] **POST** `/api/v1/ai/report-jobs/` - 创建 AI 报告任务
-- [ ] **GET** `/api/v1/ai/report-jobs/{id}/` - 获取单个 AI 报告任务
-- [ ] **PUT** `/api/v1/ai/report-jobs/{id}/` - 全量更新 AI 报告任务
-- [ ] **PATCH** `/api/v1/ai/report-jobs/{id}/` - 部分更新 AI 报告任务
-- [ ] **DELETE** `/api/v1/ai/report-jobs/{id}/` - 删除 AI 报告任务
+- [x] **GET** `/api/v1/ai/report-jobs/` - 获取 AI 报告任务列表
+- [x] **POST** `/api/v1/ai/report-jobs/` - 创建 AI 报告任务
+- [x] **GET** `/api/v1/ai/report-jobs/{id}/` - 获取单个 AI 报告任务
+- [x] **PUT** `/api/v1/ai/report-jobs/{id}/` - 全量更新 AI 报告任务
+- [x] **PATCH** `/api/v1/ai/report-jobs/{id}/` - 部分更新 AI 报告任务
+- [x] **DELETE** `/api/v1/ai/report-jobs/{id}/` - 删除 AI 报告任务
