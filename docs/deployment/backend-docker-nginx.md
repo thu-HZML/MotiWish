@@ -16,25 +16,19 @@ Copy-Item .env.example .env
 $env:MOTIWISH_ENV_FILE=".env.example"
 ```
 
-2. 生成本地 HTTPS 自签名证书：
-
-```powershell
-.\deploy\scripts\create-self-signed-cert.ps1
-```
-
-3. 构建并启动：
+2. 构建并启动：
 
 ```powershell
 docker compose up -d --build
 ```
 
-4. 访问：
+3. 访问：
 
-- API 文档：`https://localhost/api/docs/`
-- 管理后台：`https://localhost/admin/`
-- 健康检查：`https://localhost/api/v1/common/health/`
+- API 文档：`http://localhost/api/docs/`
+- 管理后台：`http://localhost/admin/`
+- 健康检查：`http://localhost/api/v1/common/health/`
 
-浏览器会提示自签名证书不受信任，开发验证时选择继续访问即可。
+默认 Nginx 配置为 HTTP-only，不需要证书，适合本地和安卓模拟器联调。安卓模拟器访问宿主机时使用 `http://10.0.2.2/`，并确保 `.env` 中 `DJANGO_ALLOWED_HOSTS` 包含 `10.0.2.2`。
 
 ## 服务器首次部署
 
@@ -51,10 +45,10 @@ docker compose up -d --build
 ```env
 DJANGO_SECRET_KEY=replace-with-a-long-random-secret
 DJANGO_DEBUG=false
-DJANGO_ALLOWED_HOSTS=8.147.57.94
-DJANGO_CSRF_TRUSTED_ORIGINS=https://8.147.57.94
-DJANGO_SESSION_COOKIE_SECURE=true
-DJANGO_CSRF_COOKIE_SECURE=true
+DJANGO_ALLOWED_HOSTS=8.147.57.94,127.0.0.1,localhost
+DJANGO_CSRF_TRUSTED_ORIGINS=http://8.147.57.94,https://8.147.57.94
+DJANGO_SESSION_COOKIE_SECURE=false
+DJANGO_CSRF_COOKIE_SECURE=false
 TIME_ZONE=Asia/Shanghai
 
 DB_ENGINE=django.db.backends.postgresql
@@ -77,6 +71,18 @@ AI_TIMEOUT=60
 AI_MAX_RETRIES=2
 ```
 
+默认配置会通过 HTTP 提供服务，适合服务器端安卓联调：
+
+```text
+http://8.147.57.94/api/docs/
+```
+
+如果要启用 HTTPS，可以复制示例配置并准备证书：
+
+```bash
+cp deploy/nginx/examples/https.conf deploy/nginx/conf.d/default.conf
+```
+
 生成服务器 IP 自签名证书：
 
 ```bash
@@ -88,10 +94,37 @@ openssl req -x509 -nodes -newkey rsa:2048 -days 365 \
   -addext "subjectAltName=IP:8.147.57.94"
 ```
 
+注意：自签证书不会被 Android/Java 默认信任。安卓端访问 HTTPS 自签服务时，需要额外配置 Network Security Config 或安装信任证书。更推荐为生产环境绑定域名并使用受信任 CA 证书；纯联调阶段建议使用 HTTP。
+
+启用 HTTPS 后，再把 cookie 安全项改为：
+
+```env
+DJANGO_SESSION_COOKIE_SECURE=true
+DJANGO_CSRF_COOKIE_SECURE=true
+```
+
 启动：
 
 ```bash
 docker compose up -d --build
+```
+
+启动后检查 Django 实际读到的生产配置：
+
+```bash
+docker compose exec web python manage.py shell -c "from django.conf import settings; print('DEBUG=', settings.DEBUG); print('ALLOWED_HOSTS=', settings.ALLOWED_HOSTS); print('CSRF_TRUSTED_ORIGINS=', settings.CSRF_TRUSTED_ORIGINS)"
+```
+
+`ALLOWED_HOSTS` 至少应包含 `8.147.57.94`、`127.0.0.1` 和 `localhost`，`DEBUG` 应为 `False`。其中 `127.0.0.1` / `localhost` 用于容器内部 healthcheck。如果这里仍然只看到 `['127.0.0.1', 'localhost']`，说明服务器当前容器没有读到新的 `.env`，请重新检查部署目录下的 `.env` 文件并重建后端容器：
+
+```bash
+docker compose up -d --build web nginx
+```
+
+如果只修改了 Nginx 配置，可以重启 Nginx 容器：
+
+```bash
+docker compose restart nginx
 ```
 
 创建或重置超级用户：
@@ -162,8 +195,8 @@ docker compose up -d --build
 docker compose down -v
 ```
 
-管理后台地址：
+默认 HTTP 管理后台地址：
 
 ```text
-https://8.147.57.94/admin/
+http://8.147.57.94/admin/
 ```
