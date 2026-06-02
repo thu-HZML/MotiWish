@@ -10,10 +10,10 @@ data class DailyMetric(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val date: LocalDate,
-    var wakeUpTime: String,
-    var sleepTime: String,
-    var phoneUsageMinutes: Int,
-    var waterCups: Int,
+    var wakeUpTime: String = "",
+    var sleepTime: String = "",
+    var phoneUsageMinutes: Int = 0,
+    var waterCups: Int = 0,
     var reward: Int = 0,
     var evaluated: Boolean = false
 )
@@ -27,7 +27,8 @@ data class PeriodicTask(
     val dayOfWeek: Int? = null,
     val dayOfMonth: Int? = null,
     val rewardAmount: Int,
-    val active: Boolean = true
+    val active: Boolean = true,
+    val createdDate: LocalDate = LocalDate.now()   // 新增字段，默认值为今天
 )
 
 @Entity(tableName = "periodic_task_completions")
@@ -46,11 +47,14 @@ data class OneShotTask(
     val name: String,
     val description: String,
     val deadline: LocalDateTime,
-    var progress: Int = 0,
+    var progress: Int = 0,                          // 用于普通任务的进度百分比，探索任务复用为已专注分钟数
     var status: String = "ACTIVE",
     var reward: Int = 0,
     var penalty: Int = 0,
-    var evaluated: Boolean = false
+    var evaluated: Boolean = false,
+    val createdDate: LocalDate = LocalDate.now(),   // 新增字段，默认值为今天
+    var settlementTrack: String = "regular",        // 是否为探索任务
+    var estimatedFocusMinutes: Int? = null          // 预估探索时长
 )
 
 @Entity(tableName = "transactions")

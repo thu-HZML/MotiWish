@@ -1,9 +1,12 @@
 package com.example.motiwish.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.motiwish.data.model.PeriodicTask
 import com.example.motiwish.viewmodel.TaskViewModel
+import com.example.motiwish.viewmodel.TodayPeriodicTask
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -23,6 +26,14 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.Instant
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+
+import com.example.motiwish.data.network.TokenManager
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.example.motiwish.data.model.OneShotTask
+import com.example.motiwish.data.network.PricingSession
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,38 +41,45 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
     val todayMetric by viewModel.todayMetric.collectAsState()
     val todaysPeriodicTasks by viewModel.todaysPeriodicTasks.collectAsState()
     val oneShotTasks by viewModel.oneShotTasks.collectAsState()
-    val sortedPeriodicTasks = todaysPeriodicTasks.sortedBy { it.second } // false（未完成）在前，true（已完成）在后
+
+    // 排序：未完成的排前面
+    val sortedPeriodicTasks = todaysPeriodicTasks.sortedBy { it.completed }
     val sortedOneShotTasks = oneShotTasks.sortedWith(compareBy {
         when (it.status) {
-            "ACTIVE" -> 0  // 进行中（未完成）排最前
-            else -> 1      // COMPLETED 或 FAILED 排后面
+            "ACTIVE" -> 0
+            else -> 1
         }
     })
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 监听返回结果
+    var isFirstLoad by remember { mutableStateOf(true) }
+
+    LaunchedEffect(isFirstLoad) {
+        if (isFirstLoad) {
+            if (TokenManager.getToken() != null) {
+                viewModel.syncTasksFromRemote()
+            }
+            isFirstLoad = false
+        }
+    }
+
+    // 监听返回结果（添加任务成功后的提示）
     LaunchedEffect(Unit) {
         val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
         savedStateHandle?.getLiveData<Boolean>("periodic_task_added")?.observeForever { added ->
             if (added == true) {
                 scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "周期任务添加成功",
-                        duration = SnackbarDuration.Long
-                    )
+                    snackbarHostState.showSnackbar("周期任务添加成功")
                 }
                 savedStateHandle.remove<Boolean>("periodic_task_added")
             }
         }
-        // 相同方式处理一次性任务添加成功（如果也需要）
         savedStateHandle?.getLiveData<Boolean>("one_shot_task_added")?.observeForever { added ->
             if (added == true) {
                 scope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "一次性任务添加成功",
-                        duration = SnackbarDuration.Long
-                    )
+                    snackbarHostState.showSnackbar("一次性任务添加成功")
                 }
                 savedStateHandle.remove<Boolean>("one_shot_task_added")
             }
@@ -72,7 +90,7 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { navController.navigate("addPeriodicTask") },
+                onClick = { navController.navigate("addTask") },
                 containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(Icons.Default.Add, contentDescription = "添加周期任务")
@@ -86,7 +104,7 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Daily Tasks Section
+            // ---------- 日常指标卡片 ----------
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,13 +125,27 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                         } else {
                             OutlinedTextField(
                                 value = todayMetric?.wakeUpTime ?: "",
-                                onValueChange = { viewModel.updateDailyMetric(it, todayMetric?.sleepTime ?: "", todayMetric?.phoneUsageMinutes ?: 0, todayMetric?.waterCups ?: 0) },
+                                onValueChange = {
+                                    viewModel.updateDailyMetric(
+                                        it,
+                                        todayMetric?.sleepTime ?: "",
+                                        todayMetric?.phoneUsageMinutes ?: 0,
+                                        todayMetric?.waterCups ?: 0
+                                    )
+                                },
                                 label = { Text("起床时间 (HH:MM)") },
                                 modifier = Modifier.fillMaxWidth()
                             )
                             OutlinedTextField(
                                 value = todayMetric?.sleepTime ?: "",
-                                onValueChange = { viewModel.updateDailyMetric(todayMetric?.wakeUpTime ?: "", it, todayMetric?.phoneUsageMinutes ?: 0, todayMetric?.waterCups ?: 0) },
+                                onValueChange = {
+                                    viewModel.updateDailyMetric(
+                                        todayMetric?.wakeUpTime ?: "",
+                                        it,
+                                        todayMetric?.phoneUsageMinutes ?: 0,
+                                        todayMetric?.waterCups ?: 0
+                                    )
+                                },
                                 label = { Text("睡觉时间 (HH:MM)") },
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -121,7 +153,12 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                 value = (todayMetric?.phoneUsageMinutes ?: 0).toString(),
                                 onValueChange = {
                                     val intValue = it.toIntOrNull() ?: 0
-                                    viewModel.updateDailyMetric(todayMetric?.wakeUpTime ?: "", todayMetric?.sleepTime ?: "", intValue, todayMetric?.waterCups ?: 0)
+                                    viewModel.updateDailyMetric(
+                                        todayMetric?.wakeUpTime ?: "",
+                                        todayMetric?.sleepTime ?: "",
+                                        intValue,
+                                        todayMetric?.waterCups ?: 0
+                                    )
                                 },
                                 label = { Text("手机使用时长 (分钟)") },
                                 modifier = Modifier.fillMaxWidth()
@@ -130,7 +167,12 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                 value = (todayMetric?.waterCups ?: 0).toString(),
                                 onValueChange = {
                                     val intValue = it.toIntOrNull() ?: 0
-                                    viewModel.updateDailyMetric(todayMetric?.wakeUpTime ?: "", todayMetric?.sleepTime ?: "", todayMetric?.phoneUsageMinutes ?: 0, intValue)
+                                    viewModel.updateDailyMetric(
+                                        todayMetric?.wakeUpTime ?: "",
+                                        todayMetric?.sleepTime ?: "",
+                                        todayMetric?.phoneUsageMinutes ?: 0,
+                                        intValue
+                                    )
                                 },
                                 label = { Text("喝水杯数") },
                                 modifier = Modifier.fillMaxWidth()
@@ -148,7 +190,7 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                 }
             }
 
-            // Periodic Tasks Section
+            // ---------- 周期任务卡片 ----------
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -167,7 +209,10 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                         if (sortedPeriodicTasks.isEmpty()) {
                             Text("今日没有周期任务")
                         } else {
-                            sortedPeriodicTasks.forEach { (task, completed) ->
+                            var showDeleteDialog by remember { mutableStateOf(false) }
+                            var taskToDelete by remember { mutableStateOf<TodayPeriodicTask?>(null) }
+
+                            sortedPeriodicTasks.forEach { task ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -175,27 +220,81 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                 ) {
                                     Column {
                                         Text(task.name, style = MaterialTheme.typography.bodyLarge)
-                                        Text("奖励: ${task.rewardAmount}", style = MaterialTheme.typography.bodySmall)
+                                        task.description?.let {
+                                            Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        }
+                                        if (task.pricingStatus == "pending") {
+                                            Text("AI定价中", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        } else {
+                                            Text("奖励: ${task.rewardAmount}", style = MaterialTheme.typography.bodySmall)
+                                        }
                                     }
-                                    if (completed) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = "已完成", tint = Color.Green)
-                                    } else {
-                                        Button(
-                                            onClick = { viewModel.completePeriodicTask(task) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (task.completed) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = "已完成", tint = Color.Green)
+                                        } else {
+                                            if (task.pricingStatus == "pending") {
+                                                Button(
+                                                    enabled = false,
+                                                    onClick = { },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f))
+                                                ) {
+                                                    Text("定价中")
+                                                }
+                                            } else {
+                                                Button(
+                                                    onClick = { viewModel.completePeriodicTask(task) },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                                ) {
+                                                    Text("完成")
+                                                }
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                taskToDelete = task
+                                                showDeleteDialog = true
+                                            }
                                         ) {
-                                            Text("完成")
+                                            Icon(Icons.Default.Delete, contentDescription = "删除")
                                         }
                                     }
                                 }
                                 Divider()
+                            }
+
+                            if (showDeleteDialog && taskToDelete != null) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteDialog = false },
+                                    title = { Text("确认删除") },
+                                    text = { Text("确定要删除任务 \"${taskToDelete?.name}\" 吗？") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                taskToDelete?.let { viewModel.deletePeriodicTask(it) }
+                                                showDeleteDialog = false
+                                                taskToDelete = null
+                                            }
+                                        ) {
+                                            Text("删除")
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = {
+                                            showDeleteDialog = false
+                                            taskToDelete = null
+                                        }) {
+                                            Text("取消")
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
                 }
             }
 
-            // One Shot Tasks Section
+            // ---------- 一次性任务卡片 ----------
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -214,14 +313,14 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Button(onClick = { navController.navigate("addOneShotTask") }) {
-                                Text("添加任务")
-                            }
                         }
 
                         if (sortedOneShotTasks.isEmpty()) {
                             Text("暂无一次性任务")
                         } else {
+                            val showDeleteDialogState = remember { mutableStateOf(false) }
+                            val taskToDeleteState = remember { mutableStateOf<OneShotTask?>(null) }
+
                             sortedOneShotTasks.forEach { task ->
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -230,16 +329,48 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                     Column(modifier = Modifier.padding(12.dp)) {
                                         Text(task.name, style = MaterialTheme.typography.titleMedium)
                                         Text(task.description, style = MaterialTheme.typography.bodySmall)
-                                        Text("截止: ${task.deadline.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))}", style = MaterialTheme.typography.bodySmall)
+                                        Text(
+                                            "截止: ${task.deadline.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))}",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
 
                                         if (task.status == "ACTIVE" && !task.evaluated) {
-                                            Slider(
-                                                value = task.progress.toFloat(),
-                                                onValueChange = { viewModel.updateOneShotProgress(task.id, it.toInt()) },
-                                                valueRange = 0f..100f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Text("进度: ${task.progress}%")
+                                            if (task.settlementTrack == "exploration") {
+                                                // 探索任务：显示专注时长和按钮
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Column {
+                                                        Text("预估专注: ${task.estimatedFocusMinutes ?: 0} 分钟")
+                                                        Text("已专注: ${task.progress} 分钟")
+                                                    }
+                                                    Button(
+                                                        onClick = {
+                                                            // 跳转到专注计时界面
+                                                            navController.navigate("focusTimer/${task.id}/${task.progress}/${task.estimatedFocusMinutes ?: 0}")
+                                                        }
+                                                    ) {
+                                                        Text(if (task.progress > 0) "继续探索" else "开始探索")
+                                                    }
+                                                }
+                                            } else {
+                                                Slider(
+                                                    value = task.progress.toFloat(),
+                                                    onValueChange = { newProgress ->
+                                                        viewModel.updateLocalProgressOnly(
+                                                            task.id,
+                                                            newProgress.toInt()
+                                                        )
+                                                    },
+                                                    onValueChangeFinished = {
+                                                        viewModel.persistProgress(task.id)
+                                                    },
+                                                    valueRange = 0f..100f,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                                Text("进度: ${task.progress}%")
+                                            }
                                             Button(
                                                 onClick = { viewModel.evaluateOneShotTask(task.id) },
                                                 modifier = Modifier.fillMaxWidth()
@@ -248,20 +379,54 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                             }
                                         } else {
                                             Text(
-                                                "状态: ${if (task.status == "COMPLETED") "已完成" else if (task.status == "FAILED") "失败" else "进行中"}",
+                                                "状态: ${when (task.status) {
+                                                    "COMPLETED" -> "已完成"
+                                                    "FAILED" -> "失败"
+                                                    else -> "进行中"
+                                                }}",
                                                 color = if (task.status == "COMPLETED") Color.Green else Color.Red
                                             )
                                             Text("奖惩: ${task.reward - task.penalty}")
                                         }
 
                                         IconButton(
-                                            onClick = { viewModel.deleteOneShotTask(task) },
+                                            onClick = {
+                                                taskToDeleteState.value = task
+                                                showDeleteDialogState.value = true
+                                            },
                                             modifier = Modifier.align(Alignment.End)
                                         ) {
                                             Icon(Icons.Default.Delete, contentDescription = "删除")
                                         }
                                     }
                                 }
+                            }
+
+                            if (showDeleteDialogState.value && taskToDeleteState.value != null) {
+                                AlertDialog(
+                                    onDismissRequest = { showDeleteDialogState.value = false },
+                                    title = { Text("确认删除") },
+                                    text = { Text("确定要删除任务 \"${taskToDeleteState.value?.name}\" 吗？") },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                taskToDeleteState.value?.let { viewModel.deleteOneShotTask(it) }
+                                                showDeleteDialogState.value = false
+                                                taskToDeleteState.value = null
+                                            }
+                                        ) {
+                                            Text("删除")
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = {
+                                            showDeleteDialogState.value = false
+                                            taskToDeleteState.value = null
+                                        }) {
+                                            Text("取消")
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -271,21 +436,74 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
     }
 }
 
+// 添加任务页面（已合并）
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddPeriodicTaskScreen(viewModel: TaskViewModel, navController: NavController) {
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("DAILY") }
-    var dayValue by remember { mutableStateOf(1) }
-    var reward by remember { mutableStateOf(10) }
+fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
+    // 通用字段
+    var taskName by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var taskType by remember { mutableStateOf("DAILY") } // "DAILY", "WEEKLY", "MONTHLY", "ONE_TIME"
+
+    // 周期任务字段
+    var dayValue by remember { mutableStateOf(1) } // 周几或每月几号
+
+    // 一次性任务字段
+    var isExploration by remember { mutableStateOf(false) }
+    var estimatedMinutes by remember { mutableStateOf("") }
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = LocalDate.now().plusDays(7)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+    )
+    val timePickerState = rememberTimePickerState(
+        initialHour = 23,
+        initialMinute = 59,
+        is24Hour = true
+    )
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 定价会话观察
+    val pricingSession by viewModel.pricingSession.collectAsState()
+    val isPricingLoading by viewModel.isPricingLoading.collectAsState()
+
+    // 监听成功消息，自动返回
+    LaunchedEffect(Unit) {
+        viewModel.uiMessage.collect { message ->
+            if (message == "任务添加成功") {
+                delay(300)
+                navController.popBackStack()
+            }
+        }
+    }
+
+    // 显示定价对话框
+    if (pricingSession != null) {
+        PricingDialog(
+            session = pricingSession!!,
+            onAccept = { viewModel.acceptPricing(pricingSession!!.id) },
+            onRevise = { direction, text -> viewModel.revisePricing(pricingSession!!.id, direction, text) },
+            onDismiss = { viewModel.dismissPricingDialog() }
+        )
+    }
+
+    fun getSelectedDateTime(): LocalDateTime? {
+        val selectedDateMillis = datePickerState.selectedDateMillis
+        val selectedDate = selectedDateMillis?.let {
+            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+        }
+        val selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
+        return selectedDate?.atTime(selectedTime)
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("添加周期任务") },
+                title = { Text("添加任务") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -298,30 +516,40 @@ fun AddPeriodicTaskScreen(viewModel: TaskViewModel, navController: NavController
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // 任务名称
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
+                value = taskName,
+                onValueChange = { taskName = it },
                 label = { Text("任务名称") },
                 modifier = Modifier.fillMaxWidth()
             )
-
-            Row {
-                Text("任务类型: ", modifier = Modifier.align(Alignment.CenterVertically))
-                Spacer(modifier = Modifier.width(8.dp))
-                listOf("DAILY" to "每日", "WEEKLY" to "每周", "MONTHLY" to "每月").forEach { (value, label) ->
+            // 描述
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("任务描述") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            // 任务类型选择
+            Text("任务类型")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("DAILY" to "每日", "WEEKLY" to "每周", "MONTHLY" to "每月", "ONE_TIME" to "一次性").forEach { (type, label) ->
                     FilterChip(
-                        selected = type == value,
-                        onClick = { type = value },
-                        label = { Text(label) },
-                        modifier = Modifier.padding(end = 8.dp)
+                        selected = taskType == type,
+                        onClick = { taskType = type },
+                        label = { Text(label) }
                     )
                 }
             }
 
-            when (type) {
+            // 根据类型显示不同表单
+            when (taskType) {
                 "WEEKLY" -> {
                     Text("选择星期几")
                     Row {
@@ -343,144 +571,142 @@ fun AddPeriodicTaskScreen(viewModel: TaskViewModel, navController: NavController
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                "ONE_TIME" -> {
+                    // 探索任务开关
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("设定为探索任务", modifier = Modifier.weight(1f))
+                        Switch(checked = isExploration, onCheckedChange = { isExploration = it })
+                    }
+                    if (isExploration) {
+                        OutlinedTextField(
+                            value = estimatedMinutes,
+                            onValueChange = { estimatedMinutes = it },
+                            label = { Text("预估专注时长 (分钟)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            isError = estimatedMinutes.isNotBlank() && estimatedMinutes.toIntOrNull() == null
+                        )
+                    }
+                    Text("截止日期")
+                    DatePicker(state = datePickerState, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                    Text("截止时间")
+                    TimePicker(state = timePickerState, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                }
+                // DAILY 不需要额外字段
             }
 
-            OutlinedTextField(
-                value = reward.toString(),
-                onValueChange = { reward = it.toIntOrNull() ?: 10 },
-                label = { Text("奖励金额") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
             Button(
-                /*
                 onClick = {
-                    if (name.isNotBlank()) {
-                        viewModel.addPeriodicTask(name, type, dayValue, reward)
-                        scope.launch {
-                            snackbarHostState.showSnackbar("添加成功")
-                            navController.popBackStack()
-                        }
+                    if (taskName.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar("请填写任务名称") }
+                        return@Button
                     }
-                },*/
-                onClick = {
-                    if (name.isNotBlank()) {
-                        viewModel.addPeriodicTask(name, type, dayValue, reward)
-                        // 设置返回结果
-                        navController.previousBackStackEntry?.savedStateHandle?.set("periodic_task_added", true)
-                        navController.popBackStack()  // 立即返回
+                    if (taskType == "ONE_TIME") {
+                        val deadline = getSelectedDateTime()
+                        if (deadline == null) {
+                            scope.launch { snackbarHostState.showSnackbar("请选择有效的截止日期和时间") }
+                            return@Button
+                        }
+                        if (isExploration) {
+                            val minutes = estimatedMinutes.toIntOrNull()
+                            if (minutes == null || minutes <= 0) {
+                                scope.launch { snackbarHostState.showSnackbar("请填写有效的专注时长") }
+                                return@Button
+                            }
+                        }
+                        viewModel.startTaskPricing(
+                            taskType = "one_time",
+                            title = taskName,
+                            description = description,
+                            dueAt = deadline,
+                            settlementTrack = if (isExploration) "exploration" else "regular",
+                            estimatedFocusMinutes = if (isExploration) estimatedMinutes.toIntOrNull() else null
+                        )
+                    } else {
+                        // 周期任务
+                        val recurrence = when (taskType) {
+                            "DAILY" -> "daily"
+                            "WEEKLY" -> "weekly"
+                            "MONTHLY" -> "monthly"
+                            else -> "none"
+                        }
+                        val weekdays = if (taskType == "WEEKLY") listOf(dayValue - 1) else null
+                        val monthDays = if (taskType == "MONTHLY") listOf(dayValue) else null
+                        viewModel.startTaskPricing(
+                            taskType = "recurring",
+                            title = taskName,
+                            description = description,
+                            recurrence = recurrence,
+                            weekdays = weekdays,
+                            monthDays = monthDays
+                        )
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("添加")
+                if (isPricingLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                } else {
+                    Text("获取 AI 定价")
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddOneShotTaskScreen(viewModel: TaskViewModel, navController: NavController) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
+fun PricingDialog(
+    session: PricingSession,
+    onAccept: () -> Unit,
+    onRevise: (direction: String, text: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var feedbackText by remember { mutableStateOf("") }
+    var selectedDirection by remember { mutableStateOf("too_high") }
 
-    // 1. 创建 DatePickerState
-    val datePickerState = rememberDatePickerState(
-        initialSelectedDateMillis = LocalDate.now().plusDays(7)
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-    )
-
-    // 2. 创建 TimePickerState
-    val timePickerState = rememberTimePickerState(
-        initialHour = 23,
-        initialMinute = 59,
-        is24Hour = true
-    )
-
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
-    // 3. 辅助函数，从state中获取选中的 LocalDateTime
-    fun getSelectedDateTime(): LocalDateTime? {
-        val selectedDateMillis = datePickerState.selectedDateMillis
-        val selectedDate = selectedDateMillis?.let {
-            Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
-        }
-        val selectedTime = LocalTime.of(timePickerState.hour, timePickerState.minute)
-        return selectedDate?.atTime(selectedTime)
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text("添加一次性任务") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("AI 定价建议") },
+        text = {
+            Column {
+                Text("奖励: ${session.quote_payload.reward_primary}")
+                Text("惩罚: ${session.quote_payload.penalty_primary}")
+                Text("理由: ${session.quote_payload.reasoning}")
+                if (session.quote_payload.risk_notes.isNotEmpty()) {
+                    Text("风险: ${session.quote_payload.risk_notes.joinToString()}")
                 }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("任务名称") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                label = { Text("任务描述") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Text("截止日期")
-            DatePicker(
-                state = datePickerState,  // 传入 state
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Text("截止时间")
-            TimePicker(
-                state = timePickerState,  // 传入 state
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Button(
-                onClick = {
-                    if (name.isNotBlank()) {
-                        val deadline = getSelectedDateTime()
-                        if (deadline != null) {
-                            viewModel.addOneShotTask(name, description, deadline)
-                            scope.launch {
-                                snackbarHostState.showSnackbar("添加成功")
-                                navController.popBackStack()
-                            }
-                        } else {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("请选择有效的日期")
-                            }
+                Spacer(modifier = Modifier.height(8.dp))
+                // 反馈选项（仅当 status == "waiting_feedback" 时显示）
+                if (session.status == "waiting_feedback") {
+                    Row {
+                        listOf("too_high" to "偏高", "too_low" to "偏低", "detail" to "详细说明").forEach { (dir, label) ->
+                            FilterChip(
+                                selected = selectedDirection == dir,
+                                onClick = { selectedDirection = dir },
+                                label = { Text(label) }
+                            )
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Text("添加")
+                    OutlinedTextField(
+                        value = feedbackText,
+                        onValueChange = { feedbackText = it },
+                        label = { Text("反馈内容 (可选)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row {
+                        Button(onClick = { onRevise(selectedDirection, feedbackText) }) {
+                            Text("调整定价")
+                        }
+                        Button(onClick = onAccept) {
+                            Text("接受并创建任务")
+                        }
+                    }
+                } else {
+                    // 可能处于重新定价加载状态
+                    CircularProgressIndicator()
+                }
             }
-        }
-    }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
 }

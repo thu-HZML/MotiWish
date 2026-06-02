@@ -1,5 +1,6 @@
 package com.example.motiwish
 
+import AuthInterceptor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,6 +33,7 @@ import java.util.concurrent.TimeUnit
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
+import androidx.navigation.NavType
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 import retrofit2.Retrofit
@@ -40,8 +42,16 @@ import com.example.motiwish.data.network.AuthApi
 
 import okhttp3.OkHttpClient
 import com.example.motiwish.data.network.TokenManager
-import com.example.motiwish.data.network.AuthInterceptor
 import com.example.motiwish.data.network.UserApi
+import com.example.motiwish.data.network.TaskApi
+import javax.net.ssl.TrustManager
+
+// 忽略证书验证
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+import com.example.motiwish.BuildConfig
 
 class MainActivity : ComponentActivity() {
 
@@ -54,29 +64,64 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var userViewModel: UserViewModel
 
+    // 辅助函数：仅用于调试，信任所有证书
+    private fun createUnsafeOkHttpClient(interceptor: AuthInterceptor): OkHttpClient {
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+        return OkHttpClient.Builder()
+            .addInterceptor(interceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
+        
+        currencyRepository = CurrencyRepository(database.currencyDao())
         taskRepository = TaskRepository(database.taskDao())
-        //currencyRepository = CurrencyRepository(database.currencyDao())
+        
         wishRepository = WishRepository(database.wishDao())
 
         // 初始化 Token 管理器
         TokenManager.init(this)
-
+/*
         // 创建 OkHttpClient 并添加 AuthInterceptor
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS) // 连接超时 30 秒
             .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
             .writeTimeout(60, TimeUnit.SECONDS)
-            .build()
+            .build()*/
+
+        // 忽略证书验证
+        val authInterceptor = AuthInterceptor()
+        val okHttpClient = if (BuildConfig.DEBUG) {
+            createUnsafeOkHttpClient(authInterceptor)
+        } else {
+            OkHttpClient.Builder()
+                .addInterceptor(authInterceptor)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build()
+        }
+
 
         val retrofit = Retrofit.Builder()
-            //.baseUrl("http://8.147.57.94/")
-            .baseUrl("http://127.0.0.1:8000/")
+            .baseUrl("https://8.147.57.94/")
+            //.baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -95,6 +140,9 @@ class MainActivity : ComponentActivity() {
             }
         })[UserViewModel::class.java]
 
+        // 创建 TaskApi
+        val taskApi = retrofit.create(TaskApi::class.java)
+        taskRepository = TaskRepository(database.taskDao(), taskApi)
         val gachaViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return GachaViewModel(gachaApi, currencyRepository) as T // <--- 【修改这行】
@@ -243,11 +291,29 @@ class MainActivity : ComponentActivity() {
                                 AddWishScreen(shopViewModel, navController, wishId)
                             }
 
-                            composable("addPeriodicTask") {
-                                AddPeriodicTaskScreen(taskViewModel, navController)
+                            composable("addTask") {
+                                AddTaskScreen(taskViewModel, navController)
                             }
-                            composable("addOneShotTask") {
-                                AddOneShotTaskScreen(taskViewModel, navController)
+
+                            // 专注时长页面路由
+                            composable(
+                                "focusTimer/{taskId}/{focusedMinutes}/{estimatedMinutes}",
+                                arguments = listOf(
+                                    navArgument("taskId") { type = NavType.IntType },
+                                    navArgument("focusedMinutes") { type = NavType.IntType },
+                                    navArgument("estimatedMinutes") { type = NavType.IntType }
+                                )
+                            ) { backStackEntry ->
+                                val taskId = backStackEntry.arguments?.getInt("taskId") ?: return@composable
+                                val focusedMinutes = backStackEntry.arguments?.getInt("focusedMinutes") ?: 0
+                                val estimatedMinutes = backStackEntry.arguments?.getInt("estimatedMinutes") ?: 0
+                                FocusTimerScreen(
+                                    navController = navController,
+                                    taskId = taskId,
+                                    initialFocusedMinutes = focusedMinutes,
+                                    estimatedMinutes = estimatedMinutes,
+                                    viewModel = taskViewModel   // 传入已创建的实例
+                                )
                             }
                         }
                     }
