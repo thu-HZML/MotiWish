@@ -43,6 +43,13 @@ import com.example.motiwish.data.network.TokenManager
 import com.example.motiwish.data.network.AuthInterceptor
 import com.example.motiwish.data.network.UserApi
 
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -66,17 +73,32 @@ class MainActivity : ComponentActivity() {
         // 初始化 Token 管理器
         TokenManager.init(this)
 
-        // 创建 OkHttpClient 并添加 AuthInterceptor
+        val trustAllCerts = arrayOf<TrustManager>(
+            object : X509TrustManager {
+                override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+                override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+            }
+        )
+
+        // 2. 构造一个忽略证书校验的 SSLContext
+        val sslContext = SSLContext.getInstance("SSL")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+        val sslSocketFactory = sslContext.socketFactory
+
+        // 3. 创建带有绕过 SSL 校验的 OkHttpClient
         val okHttpClient = OkHttpClient.Builder()
+            .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier(HostnameVerifier { _, _ -> true }) // 信任所有主机名
             .addInterceptor(AuthInterceptor())
-            .connectTimeout(30, TimeUnit.SECONDS) // 连接超时 30 秒
-            .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
 
         val retrofit = Retrofit.Builder()
-            //.baseUrl("http://8.147.57.94/")
-            .baseUrl("http://127.0.0.1:8000/")
+            .baseUrl("https://8.147.57.94/")
+            //.baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
