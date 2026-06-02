@@ -1,5 +1,6 @@
 package com.example.motiwish.ui.screens
 
+import android.util.Log
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -94,13 +95,39 @@ fun ProfileScreen(
             ) {
                 if (!userProfile?.avatar_url.isNullOrEmpty()) {
                     // 后端有头像链接，使用 Coil 加载
+                    // 【核心修改】：在这里检查并补全完整的 URL
+                    val rawUrl = userProfile?.avatar_url
+
+                    // 1. 打印原始路径，看看后端到底传了什么过来
+                    Log.d("AvatarDebug", "后端原始 rawUrl: $rawUrl")
+
+                    // 安全拼接，防止 rawUrl 缺少斜杠导致拼接成 8.147.57.94media
+                    val fullAvatarUrl = if (rawUrl?.startsWith("http") == true) {
+                        rawUrl
+                    } else if (rawUrl?.startsWith("/") == true) {
+                        "https://8.147.57.94$rawUrl"
+                    } else {
+                        "https://8.147.57.94/$rawUrl"
+                    }
+
+                    // 2. 打印最终拼接好的完整 URL
+                    Log.d("AvatarDebug", "最终请求 Coil 的 fullUrl: $fullAvatarUrl")
+
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(userProfile?.avatar_url)
-                            .crossfade(true) // 开启淡入淡出动画
+                            .data(fullAvatarUrl)
+                            .crossfade(true)
+                            .listener(
+                                onStart = { Log.d("AvatarDebug", "Coil 开始加载图片...") },
+                                onSuccess = { _, _ -> Log.d("AvatarDebug", "Coil 加载图片成功！") },
+                                onError = { _, result ->
+                                    // 这一行是揪出凶手的关键！它会打印出 Coil 为什么加载失败
+                                    Log.e("AvatarDebug", "Coil 加载失败的真凶: ", result.throwable)
+                                }
+                            )
                             .build(),
                         contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop, // 居中裁剪填充整个圆形
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {

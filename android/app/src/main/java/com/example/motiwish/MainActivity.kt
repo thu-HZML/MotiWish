@@ -50,7 +50,11 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class MainActivity : ComponentActivity() {
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.Coil
+
+class MainActivity : ComponentActivity(){
 
     private lateinit var database: AppDatabase
     private lateinit var taskRepository: TaskRepository
@@ -80,7 +84,6 @@ class MainActivity : ComponentActivity() {
                 override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
             }
         )
-
         // 2. 构造一个忽略证书校验的 SSLContext
         val sslContext = SSLContext.getInstance("SSL")
         sslContext.init(null, trustAllCerts, SecureRandom())
@@ -95,6 +98,18 @@ class MainActivity : ComponentActivity() {
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
+
+        val coilOkHttpClient = OkHttpClient.Builder()
+            .sslSocketFactory(sslSocketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier(HostnameVerifier { _, _ -> true })
+            .build()
+
+        val customImageLoader = ImageLoader.Builder(this)
+            .okHttpClient(coilOkHttpClient)
+            .build()
+
+        // 强制替换全局的默认 ImageLoader
+        Coil.setImageLoader(customImageLoader)
 
         val retrofit = Retrofit.Builder()
             .baseUrl("https://8.147.57.94/")
@@ -277,6 +292,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
 
     private fun scheduleDailyReminder() {
         val workRequest = PeriodicWorkRequestBuilder<DailyReminderWorker>(
