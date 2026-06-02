@@ -23,6 +23,10 @@ import com.example.motiwish.ui.screens.*
 import com.example.motiwish.ui.theme.MySelfManagementAppTheme
 import com.example.motiwish.viewmodel.*
 import androidx.work.*
+import com.example.motiwish.data.network.WalletApi
+import com.example.motiwish.data.network.GachaApi
+import com.example.motiwish.data.network.ShopApi
+import com.example.motiwish.data.network.TaskApi
 import java.util.concurrent.TimeUnit
 
 // 图标导入
@@ -84,8 +88,10 @@ class MainActivity : ComponentActivity() {
 
         // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
-        // taskRepository = TaskRepository(database.taskDao())
+        
         currencyRepository = CurrencyRepository(database.currencyDao())
+        taskRepository = TaskRepository(database.taskDao())
+        
         wishRepository = WishRepository(database.wishDao())
 
         // 初始化 Token 管理器
@@ -123,6 +129,11 @@ class MainActivity : ComponentActivity() {
 
         // 【新增 3】创建 UserApi 和 UserViewModel
         val userApi = retrofit.create(UserApi::class.java)
+        val walletApi = retrofit.create(WalletApi::class.java)
+        val gachaApi = retrofit.create(GachaApi::class.java)
+        val shopApi = retrofit.create(ShopApi::class.java)
+        val taskApi = retrofit.create(TaskApi::class.java)
+        currencyRepository = CurrencyRepository(walletApi)
         userViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return UserViewModel(userApi) as T
@@ -132,6 +143,29 @@ class MainActivity : ComponentActivity() {
         // 创建 TaskApi
         val taskApi = retrofit.create(TaskApi::class.java)
         taskRepository = TaskRepository(database.taskDao(), taskApi)
+        val gachaViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return GachaViewModel(gachaApi, currencyRepository) as T // <--- 【修改这行】
+            }
+        })[GachaViewModel::class.java]
+
+        val shopViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return ShopViewModel(wishRepository, currencyRepository, shopApi) as T // <--- 【修改这行】
+            }
+        })[ShopViewModel::class.java]
+
+        val taskViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return TaskViewModel(taskRepository, currencyRepository, taskApi) as T // <--- 【修改这行】
+            }
+        })[TaskViewModel::class.java]
+
+        val redemptionHistoryViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return RedemptionHistoryViewModel(shopApi) as T
+            }
+        })[RedemptionHistoryViewModel::class.java]
 
         scheduleDailyReminder()
 
@@ -144,10 +178,10 @@ class MainActivity : ComponentActivity() {
                 // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
-                val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
-                val gachaViewModel = remember { GachaViewModel(currencyRepository) }
+                //val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
+                //val gachaViewModel = remember { GachaViewModel(currencyRepository) }
                 val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
-                val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
+                //val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
 
                 val authViewModel: AuthViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
@@ -237,7 +271,16 @@ class MainActivity : ComponentActivity() {
 
                             // 这里的 history 路由保留，供个人主页跳转
                             composable("history") {
-                                HistoryScreen(historyViewModel)
+                                HistoryScreen(
+                                    viewModel = historyViewModel// 或者是 taskViewModel，取决于你原来是怎么写的
+                                )
+                            }
+
+                            composable("redemption_history") {
+                                RedemptionHistoryScreen(
+                                    navController = navController,
+                                    viewModel = redemptionHistoryViewModel
+                                )
                             }
 
                             composable(

@@ -31,9 +31,14 @@ fun StoreScreen(
 ) {
     val wishes by shopViewModel.wishes.collectAsStateWithLifecycle()
     val balance by currencyViewModel.balance.collectAsStateWithLifecycle()
+    val primaryBalance = balance?.primaryCurrency ?: 0
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        currencyViewModel.refreshWallet()
+    }
 
     // 监听两个 ViewModel 的消息
     LaunchedEffect(Unit) {
@@ -100,14 +105,32 @@ fun StoreScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            Button(onClick = { scope.launch { gachaViewModel.draw(1) } }) {
-                                Text("单抽 (10)")
+                            Button(
+                                onClick = {
+                                    // 这里可以直接调 ViewModel 的 draw(1) 了
+                                    gachaViewModel.draw(1)
+                                },
+                                enabled = primaryBalance >= 10, // 核心逻辑：钱够 10 块才能点！
+                                colors = ButtonDefaults.buttonColors(
+                                    // Compose 会自动处理置灰，但你也可以显式指定颜色
+                                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                )
+                            ) {
+                                Text("单次祈愿 (10币)")
                             }
                             Button(
-                                onClick = { scope.launch { gachaViewModel.draw(10) } },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                onClick = {
+                                    gachaViewModel.draw(10)
+                                },
+                                enabled = primaryBalance >= 100, // 核心逻辑：钱够 100 块才能点！
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.secondary,
+                                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                )
                             ) {
-                                Text("十连抽 (100)")
+                                Text("十连祈愿 (100币)")
                             }
                         }
                     }

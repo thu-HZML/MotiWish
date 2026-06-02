@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.ai.models import AIReportJob, AITaskPricingSession
@@ -12,8 +13,49 @@ class AIReportJobSerializer(serializers.ModelSerializer):
         read_only_fields = ("owner", "status", "summary", "result_payload")
 
 
+class TaskPricingBoundValueSerializer(serializers.Serializer):
+    min = serializers.IntegerField(help_text="当前任务建议范围下限。")
+    max = serializers.IntegerField(help_text="当前任务建议范围上限。")
+    recommended = serializers.IntegerField(help_text="本轮推荐值。")
+
+
+class TaskPricingBoundsSerializer(serializers.Serializer):
+    reward_primary = TaskPricingBoundValueSerializer(help_text="一级货币奖励建议范围。")
+    penalty_primary = TaskPricingBoundValueSerializer(help_text="失败惩罚建议范围。")
+
+
+class TaskPricingQuotePayloadSerializer(serializers.Serializer):
+    reward_primary = serializers.IntegerField(help_text="本轮建议的一级货币奖励。")
+    penalty_primary = serializers.IntegerField(help_text="本轮建议的失败惩罚。")
+    price_tier = serializers.CharField(help_text="定价档位，例如 small / medium。")
+    confidence = serializers.FloatField(help_text="报价置信度，0-1。")
+    reasoning = serializers.CharField(help_text="展示给用户的定价理由。")
+    risk_notes = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="风险或缺失信息提示。",
+    )
+    user_fit_notes = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="结合用户画像或反馈生成的说明。",
+    )
+    pricing_bounds = TaskPricingBoundsSerializer(help_text="反馈调整时使用的建议范围。")
+    llm_style_payload = serializers.JSONField(help_text="模型/规则辅助元数据。")
+
+
 class AITaskPricingSessionSerializer(serializers.ModelSerializer):
     created_task = TaskSerializer(read_only=True)
+    quote_payload = serializers.SerializerMethodField(
+        help_text=(
+            "当前 AI 定价结果。包含 reward_primary、penalty_primary、price_tier、confidence、"
+            "reasoning、risk_notes、user_fit_notes、pricing_bounds 和 llm_style_payload。"
+            "pricing_bounds 用于限制反馈调整范围，结构为 "
+            "{reward_primary: {min, max, recommended}, penalty_primary: {min, max, recommended}}。"
+        ),
+    )
+
+    @extend_schema_field(TaskPricingQuotePayloadSerializer)
+    def get_quote_payload(self, obj):
+        return obj.quote_payload
 
     class Meta:
         model = AITaskPricingSession

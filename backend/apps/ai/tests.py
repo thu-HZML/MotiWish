@@ -36,6 +36,8 @@ class TaskPricingAssistantTests(TestCase):
         self.assertEqual(session.status, AITaskPricingSession.Status.WAITING_FEEDBACK)
         self.assertEqual(session.quote_payload["reward_primary"], expected_reward)
         self.assertEqual(session.quote_payload["penalty_primary"], expected_penalty)
+        self.assertIn("pricing_bounds", session.quote_payload)
+        self.assertIn("本次建议奖励", session.quote_payload["reasoning"])
         self.assertIn("任务定价标准", session.pricing_standard_excerpt)
         self.assertEqual(session.profile_snapshot["nickname"], "定价测试用户")
         return session
@@ -142,6 +144,39 @@ class TaskPricingAssistantTests(TestCase):
 
         self.assertEqual(len(revised.feedback_history), 1)
         self.assertGreater(revised.quote_payload["reward_primary"], session.quote_payload["reward_primary"])
+        self.assertIn("上一轮报价基础上上调", revised.quote_payload["reasoning"])
+
+    def test_revise_task_pricing_can_reverse_after_reaching_lower_bound(self):
+        session = self._create_session(
+            {
+                "title": "整理一页错题",
+                "task_type": "one_time",
+                "recurrence": "none",
+                "settlement_track": "regular",
+                "difficulty_level": "low",
+                "progress_target": 100,
+            }
+        )
+
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            for _ in range(10):
+                session = revise_task_pricing_session(
+                    session=session,
+                    feedback_direction="too_high",
+                    feedback_text="偏高",
+                )
+            lower_bound_reward = session.quote_payload["reward_primary"]
+            session = revise_task_pricing_session(
+                session=session,
+                feedback_direction="too_low",
+                feedback_text="现在偏低了",
+            )
+
+        self.assertGreater(session.quote_payload["reward_primary"], lower_bound_reward)
+        self.assertLessEqual(
+            session.quote_payload["reward_primary"],
+            session.quote_payload["pricing_bounds"]["reward_primary"]["max"],
+        )
 
     def test_accept_task_pricing_session_creates_task_and_updates_dynamic_profile(self):
         session = self._create_session(

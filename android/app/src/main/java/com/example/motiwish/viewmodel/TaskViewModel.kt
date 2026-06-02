@@ -9,6 +9,9 @@ import com.example.motiwish.data.model.PeriodicTask
 import com.example.motiwish.data.network.PricingSession
 import com.example.motiwish.data.network.TaskOccurrence
 import com.example.motiwish.data.network.TaskPayload
+import com.example.motiwish.data.model.*
+import com.example.motiwish.data.network.TaskApi // 新增
+import com.example.motiwish.data.network.TaskCompleteRequest // 新增
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.TaskRepository
 import kotlinx.coroutines.flow.*
@@ -22,7 +25,8 @@ private const val TAG = "TaskViewModel"
 
 class TaskViewModel(
     private val taskRepository: TaskRepository,
-    private val currencyRepository: CurrencyRepository
+    private val currencyRepository: CurrencyRepository,
+    private val taskApi: TaskApi // 新增网络依赖
 ) : ViewModel() {
 
     // 日常指标
@@ -170,6 +174,8 @@ class TaskViewModel(
         }
     }
 
+    // 【修改点】：目前后端的 OpenAPI 文档中没有专门结算 DailyMetric 的端点，
+    // 这里我们先暂时仅做本地评估，或者通过通知服务器完成特定任务（需要跟后端确认）
     fun evaluateDailyMetric() {
         viewModelScope.launch {
             val metric = _todayMetric.value ?: return@launch
