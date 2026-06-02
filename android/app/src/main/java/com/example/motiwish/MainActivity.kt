@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
+import androidx.navigation.NavType
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 import retrofit2.Retrofit
@@ -38,6 +39,7 @@ import okhttp3.OkHttpClient
 import com.example.motiwish.data.network.TokenManager
 import com.example.motiwish.data.network.AuthInterceptor
 import com.example.motiwish.data.network.UserApi
+import com.example.motiwish.data.network.TaskApi
 
 class MainActivity : ComponentActivity() {
 
@@ -55,7 +57,7 @@ class MainActivity : ComponentActivity() {
 
         // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
-        taskRepository = TaskRepository(database.taskDao())
+        // taskRepository = TaskRepository(database.taskDao())
         currencyRepository = CurrencyRepository(database.currencyDao())
         wishRepository = WishRepository(database.wishDao())
 
@@ -85,6 +87,10 @@ class MainActivity : ComponentActivity() {
                 return UserViewModel(userApi) as T
             }
         })[UserViewModel::class.java]
+
+        // 创建 TaskApi
+        val taskApi = retrofit.create(TaskApi::class.java)
+        taskRepository = TaskRepository(database.taskDao(), taskApi)
 
         scheduleDailyReminder()
 
@@ -201,11 +207,29 @@ class MainActivity : ComponentActivity() {
                                 AddWishScreen(shopViewModel, navController, wishId)
                             }
 
-                            composable("addPeriodicTask") {
-                                AddPeriodicTaskScreen(taskViewModel, navController)
+                            composable("addTask") {
+                                AddTaskScreen(taskViewModel, navController)
                             }
-                            composable("addOneShotTask") {
-                                AddOneShotTaskScreen(taskViewModel, navController)
+
+                            // 专注时长页面路由
+                            composable(
+                                "focusTimer/{taskId}/{focusedMinutes}/{estimatedMinutes}",
+                                arguments = listOf(
+                                    navArgument("taskId") { type = NavType.IntType },
+                                    navArgument("focusedMinutes") { type = NavType.IntType },
+                                    navArgument("estimatedMinutes") { type = NavType.IntType }
+                                )
+                            ) { backStackEntry ->
+                                val taskId = backStackEntry.arguments?.getInt("taskId") ?: return@composable
+                                val focusedMinutes = backStackEntry.arguments?.getInt("focusedMinutes") ?: 0
+                                val estimatedMinutes = backStackEntry.arguments?.getInt("estimatedMinutes") ?: 0
+                                FocusTimerScreen(
+                                    navController = navController,
+                                    taskId = taskId,
+                                    initialFocusedMinutes = focusedMinutes,
+                                    estimatedMinutes = estimatedMinutes,
+                                    viewModel = taskViewModel   // 传入已创建的实例
+                                )
                             }
                         }
                     }

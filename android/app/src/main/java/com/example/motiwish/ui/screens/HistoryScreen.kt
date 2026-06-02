@@ -18,12 +18,33 @@ import com.example.motiwish.viewmodel.HistoryViewModel
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
 import java.util.Locale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryScreen(viewModel: HistoryViewModel) {
+    // 添加生命周期监听，每次页面可见时刷新数据
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refresh()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     // 当前显示的年份月份
     var currentYearMonth by remember { mutableStateOf(YearMonth.now()) }
     // 选中的日期（用于显示详情对话框）
@@ -60,6 +81,9 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                     }
                     IconButton(onClick = { currentYearMonth = YearMonth.now() }) {
                         Icon(Icons.Default.Today, contentDescription = "今天")
+                    }
+                    IconButton(onClick = { viewModel.refresh() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
                 }
             )
@@ -106,12 +130,18 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                         weekDates.forEach { date ->
                             val isCurrentMonth = YearMonth.from(date) == currentYearMonth
                             val tasksOnDay = tasksByDate[date] ?: emptyList()
+                            val pendingCount = tasksOnDay.count { it.status == "待完成" }
+                            val missedCount = tasksOnDay.count { it.status == "已错过" || it.status == "已取消" || it.status == "已完成"}
+                            val hasDeadline = tasksOnDay.any { it.isDeadline }  // 检查是否有截止任务
                             CalendarDayCell(
                                 date = date,
                                 isCurrentMonth = isCurrentMonth,
-                                taskCount = tasksOnDay.size,
+                                pendingCount = pendingCount,
+                                missedCount = missedCount,
                                 isToday = date == LocalDate.now(),
-                                onClick = { selectedDate = date }
+                                hasDeadline = hasDeadline,
+                                onClick = { selectedDate = date },
+                                modifier = Modifier.weight(1f)   // 关键：传入 weight
                             )
                         }
                         // 补齐空位（最后一行可能不足7个）
@@ -141,9 +171,9 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = when (task.status) {
-                                        "已完成" -> MaterialTheme.colorScheme.surfaceVariant
-                                        "失败" -> MaterialTheme.colorScheme.errorContainer
+                                    containerColor = when {
+                                        task.status.contains("完成") -> MaterialTheme.colorScheme.surfaceVariant
+                                        task.status.contains("失败") || task.status.contains("错过") -> MaterialTheme.colorScheme.errorContainer
                                         else -> MaterialTheme.colorScheme.surface
                                     }
                                 )
@@ -174,16 +204,18 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
 }
 
 @Composable
-fun RowScope.CalendarDayCell(
+fun CalendarDayCell(
     date: LocalDate,
     isCurrentMonth: Boolean,
-    taskCount: Int,
+    pendingCount: Int,
+    missedCount: Int,
     isToday: Boolean,
-    onClick: () -> Unit
+    hasDeadline: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = Modifier
-            .weight(1f)       // 现在 weight 可用，因为处于 RowScope 中
+        modifier = modifier
             .aspectRatio(1f)
             .padding(2.dp)
             .clickable(onClick = onClick),
@@ -191,29 +223,64 @@ fun RowScope.CalendarDayCell(
             containerColor = when {
                 isToday -> MaterialTheme.colorScheme.primaryContainer
                 isCurrentMonth -> MaterialTheme.colorScheme.surface
-                else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f) // 非本月半透明，融合背景
             }
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isCurrentMonth) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (taskCount > 0) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Badge(
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.padding(horizontal = 4.dp)
-                ) {
-                    Text(text = "$taskCount", fontSize = 10.sp)
+            // 日期数字所在容器（固定大小，便于绘制圆环）
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 8.dp)   // 上移日期数字
+                    .size(40.dp)   // 固定大小，保证圆环位置统一
+                    .then(
+                        if (hasDeadline) {
+                            Modifier
+                                .border(2.dp, Color.Red, CircleShape)
+                                //.padding(1.dp)  // 可选：让数字与边框之间留一点空隙
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 16.sp,
+                    color = if (isCurrentMonth) MaterialTheme.colorScheme.onSurface
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // 任务数量标记（底部居中）
+            // 底部任务数量徽章（使用 Row 水平排列）
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (pendingCount > 0) {
+                    Badge(
+                        containerColor = Color(0xFF2196F3),  // 蓝色
+                        modifier = Modifier
+                    ) {
+                        Text(text = pendingCount.toString(), fontSize = 10.sp)
+                    }
+                }
+                if (missedCount > 0) {
+                    Badge(
+                        containerColor = Color(0xFFFFC107),  // 黄色
+                        modifier = Modifier
+                    ) {
+                        Text(text = missedCount.toString(), fontSize = 10.sp)
+                    }
                 }
             }
+
         }
     }
 }
