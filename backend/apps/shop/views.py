@@ -36,7 +36,8 @@ class WishItemViewSet(ApiResponseMixin, mixins.ListModelMixin, viewsets.GenericV
         ensure_default_shop_items()  # 触发创建全局公共默认商品
         # 返回系统公共商品 (owner is None) + 该用户创建的个性化愿望商品
         queryset = WishItem.objects.filter(
-            models.Q(owner=self.request.user) | models.Q(owner__isnull=True)
+            models.Q(owner=self.request.user) | models.Q(owner__isnull=True),
+            is_enabled=True
         )
         category = self.request.query_params.get("category")
         if category:
