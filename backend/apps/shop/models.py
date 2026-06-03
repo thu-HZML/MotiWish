@@ -73,6 +73,13 @@ class WishItem(TimeStampedModel):
         verbose_name = "商店商品"
         verbose_name_plural = "商店商品"
         ordering = ("-created_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("catalog_key",),
+                condition=models.Q(owner__isnull=True) & ~models.Q(catalog_key=""),
+                name="unique_public_wish_item_catalog_key",
+            ),
+        ]
 
     def __str__(self):
         owner_info = f" [用户: {self.owner.username}]" if self.owner else " [系统公共]"
