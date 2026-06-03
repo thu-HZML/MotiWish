@@ -35,9 +35,25 @@ import androidx.compose.material3.TextButton
 import com.example.motiwish.data.model.OneShotTask
 import com.example.motiwish.data.network.PricingSession
 
+import com.example.motiwish.viewmodel.UserViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
+fun TaskScreen(
+    viewModel: TaskViewModel,
+    userViewModel: UserViewModel,
+    navController: NavController
+){
+    val showOnboarding by userViewModel.showOnboarding.collectAsStateWithLifecycle()
+
+    LaunchedEffect(showOnboarding) {
+        if (showOnboarding) {
+            navController.navigate("onboarding") {
+                launchSingleTop = true
+            }
+        }
+    }
     val todayMetric by viewModel.todayMetric.collectAsState()
     val todaysPeriodicTasks by viewModel.todaysPeriodicTasks.collectAsState()
     val oneShotTasks by viewModel.oneShotTasks.collectAsState()
@@ -63,6 +79,9 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
             }
             isFirstLoad = false
         }
+    }
+    LaunchedEffect(Unit) {
+        userViewModel.checkProfilePromptStatus()
     }
 
     // 监听返回结果（添加任务成功后的提示）

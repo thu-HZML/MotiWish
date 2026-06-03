@@ -6,6 +6,7 @@ import com.example.motiwish.data.network.UserApi
 import com.example.motiwish.data.network.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 import android.content.Context
@@ -18,12 +19,17 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
 import android.util.Log
+import com.example.motiwish.data.network.BasicProfileRequest
+import com.example.motiwish.data.network.StableProfileRequest
 import retrofit2.HttpException
 
 class UserViewModel(private val userApi: UserApi) : ViewModel() {
 
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile = _userProfile.asStateFlow()
+    // 记录当前是否需要展示问卷
+    private val _showOnboarding = MutableStateFlow(false)
+    val showOnboarding = _showOnboarding.asStateFlow()
 
     fun fetchUserProfile() {
         viewModelScope.launch {
@@ -34,6 +40,118 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
                 }
             } catch (e: Exception) {
                 // 网络错误或 Token 失效处理
+            }
+        }
+    }
+
+    // 检查是否需要弹窗
+    // 检查是否需要弹窗
+    fun checkProfilePromptStatus() {
+        viewModelScope.launch {
+            try {
+                val response = userApi.getProfilePromptStatus()
+                if (response.success) {
+                    val status = response.data
+                    if (status != null) {
+                        Log.d("MotiWish_Profile", "后端状态：basic=${status.basic.should_prompt}, stable=${status.stable.should_prompt}")
+
+                        // ✅ 【核心修复】：不仅要看后端是否要求提醒，还要看是不是“从来没被提醒过”
+                        // 只要 last_prompted_at 不是 null，说明之前已经弹过向导并执行过 ack 了，坚决不再重复弹！
+                        val needsBasicOnboarding = status.basic.should_prompt && status.basic.last_prompted_at == null
+                        val needsStableOnboarding = status.stable.should_prompt && status.stable.last_prompted_at == null
+
+                        if (needsBasicOnboarding || needsStableOnboarding) {
+                            _showOnboarding.value = true
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("UserViewModel", "检查画像状态失败", e)
+            }
+        }
+    }
+    fun submitOnboarding(
+        nickname: String,
+        gender: String,
+        stableData: StableProfileRequest,
+        onComplete: () -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                // 1. 组装并发送基础信息
+                val basicReq = BasicProfileRequest(
+                    nickname = nickname.ifEmpty { "MotiUser" },
+                    gender = gender.ifEmpty { "unknown" },
+                    occupation = "undisclosed",
+                    education_stage = "undisclosed",
+                    language_preference = "zh-hans",
+                    timezone = "Asia/Shanghai",
+                    long_term_goals = listOf("unspecified"),
+                    focus_areas = listOf("unspecified")
+                )
+
+                Log.d("MotiWish_Onboarding", "正在提交基础资料...")
+                userApi.updateBasicProfile(basicReq)
+
+                Log.d("MotiWish_Onboarding", "正在提交行为画像...")
+                userApi.updateStableProfile(stableData)
+
+                Log.d("MotiWish_Onboarding", "正在发送已读确权...")
+                userApi.ackProfilePrompt(mapOf("layer" to "basic"))
+                userApi.ackProfilePrompt(mapOf("layer" to "stable"))
+
+                // ✅ 成功流：关闭开关，刷新用户资料，退出页面
+                _showOnboarding.value = false
+                fetchUserProfile()
+                onComplete()
+
+            } catch (e: Exception) {
+                Log.e("UserViewModel", "新手引导提交失败: ${e.message}", e)
+
+                // ✅ 【核心修复】：哪怕网络崩了或者报 404 了，也必须在这里强行把弹窗开关设为 false！
+                // 这样能绝对保证打断循环，让用户先留在首页，不会被无限卡死
+                _showOnboarding.value = false
+
+                // 执行返回上一页
+                onComplete()
+            }
+        }
+    }
+
+    // 提交问卷并关闭弹窗
+    /*fun completeQuestionnaire(stableData: StableProfileRequest) {
+        viewModelScope.launch {
+            try {
+                // 1. 提交数据给后端
+                val response = userApi.updateStableProfile(stableData)
+                if (response.success) {
+                    // 2. 告诉后端我们已经展示过提醒了 (防止下次进来还重复弹)
+                    userApi.ackProfilePrompt(mapOf("layer" to "stable"))
+                    // 3. 关闭前端弹窗
+                    _showQuestionnaire.value = false
+                    // 4. 刷新一次用户信息
+                    fetchUserProfile()
+                }
+            } catch (e: Exception) {
+                Log.e("UserViewModel", "提交画像问卷失败", e)
+            }
+        }
+    }
+
+    // 关闭/跳过弹窗
+    fun dismissQuestionnaire() {
+        _showOnboarding.value = false
+    }*/
+    fun updateStableProfileData(stableData: StableProfileRequest) {
+        viewModelScope.launch {
+            try {
+                val response = userApi.updateStableProfile(stableData)
+                if (response.success) {
+                    // 修改成功后，重新拉取一下用户信息即可
+                    fetchUserProfile()
+                }
+            } catch (e: Exception) {
+                Log.e("UserViewModel", "日常更新画像失败", e)
             }
         }
     }
