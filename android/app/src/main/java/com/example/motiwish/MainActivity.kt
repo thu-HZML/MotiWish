@@ -43,7 +43,6 @@ import com.example.motiwish.data.network.AuthApi
 import okhttp3.OkHttpClient
 import com.example.motiwish.data.network.TokenManager
 import com.example.motiwish.data.network.UserApi
-import com.example.motiwish.data.network.TaskApi
 import javax.net.ssl.TrustManager
 
 // 忽略证书验证
@@ -89,8 +88,8 @@ class MainActivity : ComponentActivity() {
         // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
         
-        currencyRepository = CurrencyRepository(database.currencyDao())
-        taskRepository = TaskRepository(database.taskDao())
+        //currencyRepository = CurrencyRepository(database.currencyDao())
+        //taskRepository = TaskRepository(database.taskDao())
         
         wishRepository = WishRepository(database.wishDao())
 
@@ -132,7 +131,7 @@ class MainActivity : ComponentActivity() {
         val walletApi = retrofit.create(WalletApi::class.java)
         val gachaApi = retrofit.create(GachaApi::class.java)
         val shopApi = retrofit.create(ShopApi::class.java)
-        val taskApi = retrofit.create(TaskApi::class.java)
+
         currencyRepository = CurrencyRepository(walletApi)
         userViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {

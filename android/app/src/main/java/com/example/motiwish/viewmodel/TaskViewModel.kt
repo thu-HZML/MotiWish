@@ -183,19 +183,19 @@ class TaskViewModel(
                 _uiMessage.emit("今日已评估")
                 return@launch
             }
-            try {
-                val reward = taskRepository.evaluateDailyMetric(metric)
-                _todayMetric.value = metric
-                if (reward > 0) {
-                    currencyRepository.addPrimaryCurrency(reward, "日常任务奖励")
-                    _uiMessage.emit("获得 $reward 货币")
-                } else if (reward < 0) {
-                    currencyRepository.deductPrimaryCurrency(-reward, "日常任务惩罚")
-                    _uiMessage.emit("扣除 ${-reward} 货币")
-                }
-            } catch (e: Exception) {
-                _uiMessage.emit("评估失败: ${e.message}")
-            }
+            //try {
+            //    val reward = taskRepository.evaluateDailyMetric(metric)
+            //    _todayMetric.value = metric
+            //    if (reward > 0) {
+            //        currencyRepository.addPrimaryCurrency(reward, "日常任务奖励")
+            //        _uiMessage.emit("获得 $reward 货币")
+            //    } else if (reward < 0) {
+            //        currencyRepository.deductPrimaryCurrency(-reward, "日常任务惩罚")
+            //        _uiMessage.emit("扣除 ${-reward} 货币")
+            //    }
+            //} catch (e: Exception) {
+            //    _uiMessage.emit("评估失败: ${e.message}")
+            //}
         }
     }
 
@@ -211,7 +211,7 @@ class TaskViewModel(
                 // 根据返回的 occurrence 判断是否获得奖励（status == "completed" 时）
                 val reward = if (occurrence.status == "completed") occurrence.task.reward_primary else 0
                 if (reward > 0) {
-                    currencyRepository.addPrimaryCurrency(reward, "周期任务奖励")
+                    //currencyRepository.addPrimaryCurrency(reward, "周期任务奖励")
                     _uiMessage.emit("完成周期任务，获得 $reward 一级货币")
                 } else {
                     // 可能惩罚或没有奖励

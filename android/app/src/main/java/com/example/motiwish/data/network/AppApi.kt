@@ -79,10 +79,10 @@ data class TaskCompleteRecord(
     val progress: Int
 )
 
-interface TaskApi {
-    @POST("api/v1/tasks/tasks/{id}/complete/")
-    suspend fun completeTask(
-        @Path("id") taskId: Int,
-        @Body request: TaskCompleteRequest
-    ): ApiResponse<TaskCompleteRecord>
-}
+//interface TaskApi {
+//    @POST("api/v1/tasks/tasks/{id}/complete/")
+//    suspend fun completeTask(
+//        @Path("id") taskId: Int,
+//        @Body request: TaskCompleteRequest
+//    ): ApiResponse<TaskCompleteRecord>
+//}
