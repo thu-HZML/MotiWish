@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.utils import timezone
 from apps.common.models import TimeStampedModel
 
 
@@ -119,3 +119,33 @@ class RedemptionRecord(TimeStampedModel):
         verbose_name = "兑换记录"
         verbose_name_plural = "兑换记录"
         ordering = ("-created_at", "-id")
+
+
+class UserActiveEffect(TimeStampedModel):
+    owner = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="active_effects",
+        verbose_name="拥有者"
+    )
+    effect_type = models.CharField(max_length=50, verbose_name="效果类型")  # 例如 "indulgence_day"
+    source_item = models.ForeignKey(
+        "WishItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="来源道具"
+    )
+    starts_at = models.DateTimeField(verbose_name="开始时间")
+    expires_at = models.DateTimeField(verbose_name="过期时间")
+    remaining_uses = models.IntegerField(default=-1, verbose_name="剩余使用次数")  # -1代表根据时间自然过期，不受次数限制
+    effect_payload = models.JSONField(default=dict, blank=True, verbose_name="效果附加负载")
+
+    class Meta:
+        verbose_name = "用户有效效果/Buff"
+        verbose_name_plural = "用户有效效果/Buff"
+        ordering = ("-created_at",)
+
+    def is_active(self):
+        now = timezone.now()
+        return self.starts_at <= now <= self.expires_at and (self.remaining_uses == -1 or self.remaining_uses > 0)
