@@ -20,6 +20,8 @@ import com.example.motiwish.viewmodel.GachaViewModel
 import com.example.motiwish.viewmodel.ShopViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
+// 【新增】：导入 alpha 修饰符用于置灰
+import androidx.compose.ui.draw.alpha
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,12 +110,10 @@ fun StoreScreen(
                         ) {
                             Button(
                                 onClick = {
-                                    // 这里可以直接调 ViewModel 的 draw(1) 了
                                     gachaViewModel.draw(1)
                                 },
-                                enabled = primaryBalance >= 10, // 核心逻辑：钱够 10 块才能点！
+                                enabled = primaryBalance >= 10,
                                 colors = ButtonDefaults.buttonColors(
-                                    // Compose 会自动处理置灰，但你也可以显式指定颜色
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
@@ -124,7 +124,7 @@ fun StoreScreen(
                                 onClick = {
                                     gachaViewModel.draw(10)
                                 },
-                                enabled = primaryBalance >= 100, // 核心逻辑：钱够 100 块才能点！
+                                enabled = primaryBalance >= 100,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.secondary,
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
@@ -140,12 +140,15 @@ fun StoreScreen(
 
             // --- 3. 愿望商店标题 ---
             item {
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("兑换愿望", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
 
             // --- 4. 愿望列表 ---
-            items(wishes) { wish ->
+            // 按库存是否为 0 排序（售罄的排在最后面）
+            val sortedWishes = wishes.sortedBy { it.inventory == 0 }
+
+            items(sortedWishes) { wish ->
                 WishCard(wish, shopViewModel, snackbarHostState, navController)
             }
         }
@@ -171,13 +174,16 @@ fun WishCard(
     snackbarHostState: SnackbarHostState,
     navController: NavController
 ) {
-    // ✅ 将协程作用域移到顶层（直接在 @Composable 函数内）
     val scope = rememberCoroutineScope()
+
+    // 判断是否售罄
+    val isSoldOut = wish.inventory != null && wish.inventory == 0
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { navController.navigate("addWish?wishId=${wish.id}") },
+            .alpha(if (isSoldOut) 0.5f else 1f) // 售罄置灰
+            .clickable(enabled = !isSoldOut) { navController.navigate("addWish?wishId=${wish.id}") }, // 售罄不可点进详情
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
@@ -190,31 +196,42 @@ fun WishCard(
             Column {
                 Text(wish.name, style = MaterialTheme.typography.titleMedium)
                 Text("需要: ${wish.costSecondary} 二级货币", style = MaterialTheme.typography.bodySmall)
-                if (wish.isSystem) {
-                    Text(
-                        "系统推荐",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (wish.isSystem) {
+                        Text(
+                            "系统推荐",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    // 如果库存大于 0，展示剩余库存
+                    if (wish.inventory != null && wish.inventory > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "剩余: ${wish.inventory}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
                 }
             }
 
             Button(
                 onClick = {
-                    // ✅ 直接使用顶层的 scope
                     scope.launch {
                         if (viewModel.purchaseWish(wish)) {
-                            // 兑换成功时显示 Snackbar
                             snackbarHostState.showSnackbar("兑换成功！")
                         } else {
-                            // 可选：显示失败提示
-                            snackbarHostState.showSnackbar("兑换失败，货币不足")
+                            snackbarHostState.showSnackbar("兑换失败，货币不足或网络错误")
                         }
                     }
                 },
+                enabled = !isSoldOut, // 售罄禁用按钮
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text("兑换")
+                Text(if (isSoldOut) "已售罄" else "兑换") // 售罄文案变化
             }
         }
     }
@@ -223,10 +240,8 @@ fun WishCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddWishScreen(viewModel: ShopViewModel, navController: NavController, wishId: Int) {
-    // 1. 正确地观察状态（这会触发 UI 的自动重组）
     val wishes by viewModel.wishes.collectAsStateWithLifecycle()
 
-    // 2. 从观察到的状态列表中寻找对应的愿望
     val wish = if (wishId != -1) {
         wishes.find { it.id == wishId }
     } else null
@@ -275,7 +290,6 @@ fun AddWishScreen(viewModel: ShopViewModel, navController: NavController, wishId
                         if (wishId == -1) {
                             viewModel.addCustomWish(name, cost)
                         } else {
-                            // ✅ 使用 copy() 创建新对象，而不是直接修改 val 属性
                             wish?.let {
                                 val updatedWish = it.copy(name = name, costSecondary = cost)
                                 viewModel.updateWish(updatedWish)
