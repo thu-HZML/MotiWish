@@ -93,10 +93,18 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 if (!userProfile?.avatar_url.isNullOrEmpty()) {
+                    val rawUrl = userProfile?.avatar_url
+                    val fullAvatarUrl = if (rawUrl?.startsWith("http") == true) {
+                        rawUrl
+                    } else if (rawUrl?.startsWith("/") == true) {
+                        "https://8.147.57.94$rawUrl"
+                    } else {
+                        "https://8.147.57.94/$rawUrl"
+                    }
                     // 后端有头像链接，使用 Coil 加载
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(userProfile?.avatar_url)
+                            .data(fullAvatarUrl)
                             .crossfade(true) // 开启淡入淡出动画
                             .build(),
                         contentDescription = "Avatar",

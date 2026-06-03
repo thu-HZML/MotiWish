@@ -52,6 +52,9 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
 import com.example.motiwish.BuildConfig
 
+import coil.ImageLoader
+import coil.Coil
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -167,6 +170,29 @@ class MainActivity : ComponentActivity() {
         })[RedemptionHistoryViewModel::class.java]
 
         scheduleDailyReminder()
+
+        // 【加回保险 2：强行给 Coil 注入信任证书的加载器】
+        // ==========================================
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+
+        // 创建 Coil 专用的 OkHttpClient（不需要拦截器，只要忽略证书）
+        val coilOkHttpClient = OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+
+        val customImageLoader = ImageLoader.Builder(this)
+            .okHttpClient(coilOkHttpClient)
+            .build()
+
+        // 强制替换全局的默认 ImageLoader
+        Coil.setImageLoader(customImageLoader)
 
         setContent {
             MySelfManagementAppTheme {
