@@ -34,13 +34,14 @@ class ShopViewModel(
                             name = networkItem.title,
                             costSecondary = networkItem.price_secondary,
                             isSystem = true,
-                            custom = false
+                            custom = false,
+                            inventory = networkItem.inventory
                         )
                     }
                     _wishes.value = realWishes
                 }
             } catch (e: Exception) {
-                _uiMessage.emit("获取商店列表失败，请检查网络")
+                _uiMessage.emit("报错啦: ${e.javaClass.simpleName} - ${e.message}")
             }
         }
     }
