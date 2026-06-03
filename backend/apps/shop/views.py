@@ -35,15 +35,39 @@ class WishItemViewSet(ApiResponseMixin, mixins.ListModelMixin, viewsets.GenericV
     queryset = WishItem.objects.none()
 
     def get_queryset(self):
-        ensure_default_shop_items()  # 触发创建全局公共默认商品
-        # 返回系统公共商品 (owner is None) + 该用户创建的个性化愿望商品，且过滤掉下架商品
+        ensure_default_shop_items()  
+        
         queryset = WishItem.objects.filter(
             models.Q(owner=self.request.user) | models.Q(owner__isnull=True),
             is_enabled=True
         )
+        
+
         category = self.request.query_params.get("category")
+        item_kind = self.request.query_params.get("item_kind")
+        
+
         if category:
-            queryset = queryset.filter(category=category)
+            from apps.shop.models import ShopItemCategory
+            if category == "growth_material":
+                queryset = queryset.filter(category=ShopItemCategory.EXPERIENCE_PACK)
+            elif category == "utility_item":
+
+                queryset = queryset.filter(category__in=[
+                    ShopItemCategory.DEBT_REPAYMENT_CARD,
+                    ShopItemCategory.TASK_FAILURE_PROTECTION_CARD,
+                    ShopItemCategory.INDULGENCE_DAY_CARD
+                ])
+            elif category == "wish_reward":
+                queryset = queryset.filter(category=ShopItemCategory.WISH)
+            else:
+                # 正常匹配
+                queryset = queryset.filter(category=category)
+                
+
+        if item_kind:
+            queryset = queryset.filter(category=item_kind)
+            
         return queryset
 
     @extend_schema(
