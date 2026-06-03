@@ -20,7 +20,7 @@ from apps.gacha.services import draw_once
         tags=["Gacha"],
         summary="获取卡池列表",
         description="返回当前可用卡池列表，包括四档奖励和三层保底参数。",
-        responses=api_envelope_serializer("GachaPoolListResponse", GachaPoolSerializer(many=True)),
+        responses=GachaPoolSerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["Gacha"],
@@ -84,7 +84,7 @@ class GachaPoolViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
         tags=["Gacha"],
         summary="获取抽卡记录",
         description="返回当前用户的抽卡历史记录。",
-        responses=api_envelope_serializer("GachaRecordListResponse", GachaDrawRecordSerializer(many=True)),
+        responses=GachaDrawRecordSerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["Gacha"],

@@ -15,10 +15,18 @@ from apps.tasks.serializers import (
     TaskPricingMetaSerializer,
     TaskPricingPreviewPayloadSerializer,
     TaskPricingPreviewSerializer,
+    TaskProgressUpdateSerializer,
     TaskSerializer,
+    TaskUpdateSerializer,
     build_preview_response,
 )
-from apps.tasks.services import apply_task_pricing, complete_task, ensure_occurrences_for_date, request_task_pricing
+from apps.tasks.services import (
+    apply_task_pricing,
+    complete_task,
+    ensure_occurrences_for_date,
+    request_task_pricing,
+    update_task_progress,
+)
 
 
 @extend_schema_view(
@@ -26,7 +34,7 @@ from apps.tasks.services import apply_task_pricing, complete_task, ensure_occurr
         tags=["Tasks"],
         summary="获取任务列表",
         description="返回当前登录用户创建的任务模板列表。",
-        responses=api_envelope_serializer("TaskListResponse", TaskSerializer(many=True)),
+        responses=TaskSerializer(many=True),
     ),
     create=extend_schema(
         tags=["Tasks"],
@@ -79,8 +87,8 @@ from apps.tasks.services import apply_task_pricing, complete_task, ensure_occurr
         summary="获取单个任务",
         responses=api_envelope_serializer("TaskRetrieveResponse", TaskSerializer()),
     ),
-    update=extend_schema(tags=["Tasks"], summary="更新任务", request=TaskSerializer),
-    partial_update=extend_schema(tags=["Tasks"], summary="部分更新任务", request=TaskSerializer),
+    update=extend_schema(tags=["Tasks"], summary="更新任务模板", request=TaskUpdateSerializer),
+    partial_update=extend_schema(tags=["Tasks"], summary="部分更新任务模板", request=TaskUpdateSerializer),
     destroy=extend_schema(tags=["Tasks"], summary="删除任务"),
 )
 class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
@@ -90,6 +98,11 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Task.objects.filter(owner=self.request.user)
+
+    def get_serializer_class(self):
+        if self.action in {"update", "partial_update"}:
+            return TaskUpdateSerializer
+        return TaskSerializer
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
@@ -230,6 +243,42 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     def history(self, request):
         queryset = TaskOccurrence.objects.filter(owner=request.user).select_related("task")[:100]
         return api_response(data=TaskOccurrenceSerializer(queryset, many=True).data, message="获取历史记录成功")
+
+    @extend_schema(
+        tags=["Tasks"],
+        summary="更新任务实际进度",
+        description=(
+            "更新指定日期任务实例的实际完成进度；不传 occurrence_date 时默认更新今天。"
+            "任务模板中的 progress_target 是目标值，不用于记录实际进度。"
+        ),
+        request=TaskProgressUpdateSerializer,
+        responses=api_envelope_serializer("TaskProgressUpdateResponse", TaskOccurrenceSerializer()),
+        examples=[
+            OpenApiExample(
+                "更新今天的任务进度",
+                value={"progress": 60},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "更新指定日期的任务进度",
+                value={"occurrence_date": "2026-06-03", "progress": 80},
+                request_only=True,
+            ),
+        ],
+    )
+    @action(detail=True, methods=["patch"], url_path="progress")
+    def progress(self, request, pk=None):
+        serializer = TaskProgressUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        occurrence = update_task_progress(
+            task=self.get_object(),
+            progress=serializer.validated_data["progress"],
+            target_date=serializer.validated_data.get("occurrence_date"),
+        )
+        return api_response(
+            data=TaskOccurrenceSerializer(occurrence).data,
+            message="任务进度已更新",
+        )
 
     @extend_schema(
         tags=["Tasks"],
