@@ -21,6 +21,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import android.util.Log
 import com.example.motiwish.data.network.BasicProfileRequest
 import com.example.motiwish.data.network.StableProfileRequest
+import com.example.motiwish.data.network.StableProfileResponse
 import retrofit2.HttpException
 
 class UserViewModel(private val userApi: UserApi) : ViewModel() {
@@ -30,6 +31,9 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
     // 记录当前是否需要展示问卷
     private val _showOnboarding = MutableStateFlow(false)
     val showOnboarding = _showOnboarding.asStateFlow()
+
+    private val _stableProfileData = MutableStateFlow<StableProfileResponse?>(null)
+    val stableProfileData = _stableProfileData.asStateFlow()
 
     fun fetchUserProfile() {
         viewModelScope.launch {
@@ -44,7 +48,19 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
         }
     }
 
-    // 检查是否需要弹窗
+    fun fetchStableProfile() {
+        viewModelScope.launch {
+            try {
+                val response = userApi.getStableProfile()
+                if (response.success) {
+                    _stableProfileData.value = response.data
+                }
+            } catch (e: Exception) {
+                Log.e("UserViewModel", "获取稳定画像失败", e)
+            }
+        }
+    }
+
     // 检查是否需要弹窗
     fun checkProfilePromptStatus() {
         viewModelScope.launch {

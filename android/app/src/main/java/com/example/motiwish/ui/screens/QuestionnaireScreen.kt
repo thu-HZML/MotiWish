@@ -17,10 +17,15 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.motiwish.data.network.StableProfileRequest
 import com.example.motiwish.viewmodel.UserViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuestionnaireScreen(viewModel: UserViewModel, navController: NavController) {
+    val stableData by viewModel.stableProfileData.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        viewModel.fetchStableProfile()
+    }
     // --- 状态保存区 ---
     var challenges by remember { mutableStateOf(setOf<String>()) }
     var motivations by remember { mutableStateOf(setOf<String>()) }
@@ -32,6 +37,27 @@ fun QuestionnaireScreen(viewModel: UserViewModel, navController: NavController) 
     var energyPeaks by remember { mutableStateOf(setOf<String>()) }
     var taskGranularity by remember { mutableStateOf("") }
     var planningStyle by remember { mutableStateOf("") }
+
+
+    LaunchedEffect(stableData) {
+        stableData?.let { data ->
+            // 过滤掉列表里的 "unspecified" 占位符
+            challenges = data.self_management_challenges?.filter { it != "unspecified" }?.toSet() ?: setOf()
+            motivations = data.motivation_preferences?.filter { it != "unspecified" }?.toSet() ?: setOf()
+            energyPeaks = data.energy_peak_periods?.filter { it != "unspecified" }?.toSet() ?: setOf()
+
+            // 过滤掉字符串里的 "undisclosed" 占位符
+            reward = if (data.reward_preference == "undisclosed") "" else (data.reward_preference ?: "")
+            penalty = if (data.penalty_tolerance == "undisclosed") "" else (data.penalty_tolerance ?: "")
+            stress = if (data.stress_sensitivity == "undisclosed") "" else (data.stress_sensitivity ?: "")
+            chronotype = if (data.chronotype == "undisclosed") "" else (data.chronotype ?: "")
+            taskGranularity = if (data.task_granularity_preference == "undisclosed") "" else (data.task_granularity_preference ?: "")
+            planningStyle = if (data.planning_style_preference == "undisclosed") "" else (data.planning_style_preference ?: "")
+
+            // 数值直接赋值
+            disciplineScore = data.self_discipline_score?.toFloat() ?: 5f
+        }
+    }
 
     Scaffold(
         topBar = {

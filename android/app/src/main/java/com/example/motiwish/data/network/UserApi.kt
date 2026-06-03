@@ -48,6 +48,18 @@ data class StableProfileRequest(
     val task_granularity_preference: String,
     val planning_style_preference: String
 )
+data class StableProfileResponse(
+    val self_management_challenges: List<String>?,
+    val motivation_preferences: List<String>?,
+    val reward_preference: String?,
+    val penalty_tolerance: String?,
+    val stress_sensitivity: String?,
+    val self_discipline_score: Int?,
+    val chronotype: String?,
+    val energy_peak_periods: List<String>?,
+    val task_granularity_preference: String?,
+    val planning_style_preference: String?
+)
 
 data class BasicProfileRequest(
     val nickname: String,
@@ -87,4 +99,8 @@ interface UserApi {
     // 4. 提交/更新稳定画像问卷
     @PATCH("api/v1/users/profile/stable/")
     suspend fun updateStableProfile(@Body request: StableProfileRequest): ApiResponse<Any>
+
+    // 获取用户的稳定画像数据
+    @GET("api/v1/users/profile/stable/")
+    suspend fun getStableProfile(): ApiResponse<StableProfileResponse>
 }
