@@ -50,6 +50,27 @@ def ensure_occurrences_for_date(user, target_date):
 
 
 @transaction.atomic
+def update_task_progress(*, task, progress, target_date=None):
+    target_date = target_date or timezone.localdate()
+    if not _task_matches_date(task, target_date):
+        raise ValueError("该任务在指定日期不可用，无法更新进度")
+    if progress > task.progress_target:
+        raise ValueError(f"任务进度不能超过进度目标 {task.progress_target}")
+
+    occurrence, _ = TaskOccurrence.objects.select_for_update().get_or_create(
+        task=task,
+        occurrence_date=target_date,
+        defaults={"owner": task.owner},
+    )
+    if occurrence.status == OccurrenceStatus.COMPLETED:
+        raise ValueError("已完成的任务实例不能修改进度")
+
+    occurrence.progress = progress
+    occurrence.save(update_fields=["progress", "updated_at"])
+    return occurrence
+
+
+@transaction.atomic
 def complete_task(*, task, target_date=None, progress=None):
     target_date = target_date or timezone.localdate()
     occurrence, _ = TaskOccurrence.objects.select_for_update().get_or_create(

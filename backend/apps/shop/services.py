@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
 from apps.shop.catalog import DEFAULT_SHOP_ITEMS
@@ -6,7 +6,6 @@ from apps.shop.models import (
     RedemptionRecord,
     RedemptionStatus,
     ShopItemCategory,
-    ShopItemKind,
     UserInventory,
     WishItem,
     WishPriceTier,
@@ -27,20 +26,14 @@ def clamp_price_by_tier(*, price_tier, suggested_price):
     return max(bounds["min"], min(bounds["max"], suggested_price))
 
 
-def _validate_item_shape(item):
-    if item.category == ShopItemCategory.GROWTH_MATERIAL and item.item_kind != ShopItemKind.EXPERIENCE_PACK:
-        raise ValueError("养成材料目前仅支持经验材料")
-    if item.category == ShopItemCategory.WISH_REWARD and item.item_kind != ShopItemKind.WISH:
-        raise ValueError("愿望奖励的商品类型必须为 wish")
-
-
 @transaction.atomic
-def ensure_default_shop_items(*, user):
+def ensure_default_shop_items():
+    # 默认商品 owner 设为 None，作为全局公共模板，避免对每个用户进行重复克隆
     created_items = []
     for payload in DEFAULT_SHOP_ITEMS:
         catalog_key = payload["catalog_key"]
         item, created = WishItem.objects.get_or_create(
-            owner=user,
+            owner=None,
             catalog_key=catalog_key,
             defaults=payload,
         )
@@ -75,7 +68,6 @@ def redeem_item(*, user, item):
     item = WishItem.objects.select_for_update().get(pk=item.pk)
     if not item.is_enabled:
         raise ValueError("该商品未上架")
-    _validate_item_shape(item)
 
     _decrease_stock(item)
     _, transaction_record = change_balance(
@@ -92,14 +84,19 @@ def redeem_item(*, user, item):
     fulfilled_at = None
     effect_snapshot = {}
 
-    if item.category == ShopItemCategory.GROWTH_MATERIAL:
+    # 根据合并后的单个 category 字段分发行为
+    if item.category == ShopItemCategory.EXPERIENCE_PACK:
         experience = int(item.effect_payload.get("experience", 0))
         if experience <= 0:
             raise ValueError("经验材料必须配置正数 experience")
         effect_snapshot = grant_experience(user=user, amount=experience)
         status = RedemptionStatus.COMPLETED
         fulfilled_at = timezone.now()
-    elif item.category == ShopItemCategory.UTILITY_ITEM:
+    elif item.category in {
+        ShopItemCategory.DEBT_REPAYMENT_CARD,
+        ShopItemCategory.TASK_FAILURE_PROTECTION_CARD,
+        ShopItemCategory.INDULGENCE_DAY_CARD,
+    }:
         inventory = _increase_inventory(user=user, item=item)
         effect_snapshot = {"inventory_id": inventory.id, "quantity": inventory.quantity}
         status = RedemptionStatus.COMPLETED
@@ -123,7 +120,7 @@ def use_inventory_item(*, user, inventory):
         raise ValueError("道具数量不足")
 
     item = inventory.item
-    if item.item_kind != ShopItemKind.DEBT_REPAYMENT_CARD:
+    if item.category != ShopItemCategory.DEBT_REPAYMENT_CARD:
         raise ValueError("该道具当前暂不支持主动使用")
 
     wallet, transaction_record = reset_primary_debt(user=user, memo=f"使用道具：{item.title}")

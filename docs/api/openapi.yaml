@@ -7,7 +7,6 @@ paths:
   /api/v1/ai/report-jobs/:
     get:
       operationId: ai_report_jobs_list
-      description: 返回当前用户创建的 AI 报告任务列表，适合 AI 页或历史报告页使用。
       summary: 获取 AI 报告任务列表
       parameters:
       - name: page
@@ -25,11 +24,10 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedAIReportJobListResponseList'
+                $ref: '#/components/schemas/PaginatedAIReportJobList'
           description: ''
     post:
       operationId: ai_report_jobs_create
-      description: 创建一条 AI 报告生成任务，用于后续异步分析、总结或推荐。
       summary: 创建 AI 报告任务
       tags:
       - AI
@@ -38,15 +36,6 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AIReportJob'
-            examples:
-              创建周报任务:
-                value:
-                  report_type: weekly
-                  summary: 生成本周任务完成情况与建议
-                  status: pending
-                  input_payload:
-                    range: 2026-W18
-                  result_payload: {}
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/AIReportJob'
@@ -66,14 +55,13 @@ paths:
   /api/v1/ai/report-jobs/{id}/:
     get:
       operationId: ai_report_jobs_retrieve
-      description: 返回一条具体的 AI 报告任务详情，包括输入、状态和结果。
       summary: 获取单个 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
       - AI
@@ -88,14 +76,13 @@ paths:
           description: ''
     put:
       operationId: ai_report_jobs_update
-      description: 全量更新 AI 报告任务。
       summary: 更新 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
       - AI
@@ -122,14 +109,13 @@ paths:
           description: ''
     patch:
       operationId: ai_report_jobs_partial_update
-      description: 部分更新 AI 报告任务，例如回填状态或结果摘要。
       summary: 部分更新 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
       - AI
@@ -155,14 +141,13 @@ paths:
           description: ''
     delete:
       operationId: ai_report_jobs_destroy
-      description: 删除一条 AI 报告任务记录。
       summary: 删除 AI 报告任务
       parameters:
       - in: path
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this AI报告任务.
+        description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
       - AI
@@ -171,6 +156,182 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/ai/task-pricing-sessions/:
+    get:
+      operationId: ai_task_pricing_sessions_list
+      summary: 获取任务定价会话列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAITaskPricingSessionList'
+          description: ''
+    post:
+      operationId: ai_task_pricing_sessions_create
+      description: 前端提交任务草稿后，后端会读取用户画像和全局任务定价标准，返回 quote_payload。前端展示报价后，再调用 feedback
+        接口让用户接受或反馈。
+      summary: 创建任务定价会话
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+            examples:
+              一次性任务:
+                value:
+                  task_payload:
+                    title: 完成数据库课程复习
+                    description: 整理索引、事务、范式相关笔记
+                    task_type: one_time
+                    recurrence: none
+                    settlement_track: regular
+                    difficulty_level: medium
+                    progress_target: 100
+                    tags:
+                    - study
+                    - database
+              日常任务:
+                value:
+                  task_payload:
+                    title: 英语听力 30 分钟
+                    task_type: daily
+                    recurrence: daily
+                    settlement_track: regular
+                    difficulty_level: medium
+                    metric_key: study_minutes
+                    target_value: 30
+                    progress_target: 100
+                    tags:
+                    - english
+              每周周期任务:
+                value:
+                  task_payload:
+                    title: 每周健身 3 次
+                    task_type: recurring
+                    recurrence: weekly
+                    settlement_track: regular
+                    difficulty_level: medium
+                    weekdays:
+                    - 1
+                    - 3
+                    - 5
+                    progress_target: 100
+                    tags:
+                    - fitness
+              探索任务:
+                value:
+                  task_payload:
+                    title: 排查训练脚本问题
+                    task_type: one_time
+                    recurrence: none
+                    settlement_track: exploration
+                    difficulty_level: high
+                    estimated_focus_minutes: 180
+                    progress_target: 100
+                    tags:
+                    - coding
+                    - research
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingSessionCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingSessionCreateResponse'
+          description: ''
+  /api/v1/ai/task-pricing-sessions/{id}/:
+    get:
+      operationId: ai_task_pricing_sessions_retrieve
+      summary: 获取任务定价会话详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI任务定价会话.
+        required: true
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingSessionDetailResponse'
+          description: ''
+  /api/v1/ai/task-pricing-sessions/{id}/feedback/:
+    post:
+      operationId: ai_task_pricing_sessions_feedback_create
+      description: action=revise 时根据偏高/偏低/详细说明重新定价；action=accept 时接受当前 quote_payload，创建正式任务，并更新用户动态画像。
+      summary: 反馈或接受任务定价
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI任务定价会话.
+        required: true
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+            examples:
+              接受当前定价:
+                value:
+                  action: accept
+              认为定价偏低:
+                value:
+                  action: revise
+                  feedback_direction: too_low
+                  feedback_text: 这个任务需要额外查资料，奖励可以再高一点。
+              详细反馈:
+                value:
+                  action: revise
+                  feedback_direction: detail
+                  feedback_text: 惩罚偏重，我最近压力比较大，希望失败成本轻一些。
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AITaskPricingFeedback'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AITaskPricingFeedbackResponse'
+          description: ''
   /api/v1/common/health/:
     get:
       operationId: common_health_retrieve
@@ -268,7 +429,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGachaPoolListResponseList'
+                $ref: '#/components/schemas/PaginatedGachaPoolList'
           description: ''
   /api/v1/gacha/pools/{id}/:
     get:
@@ -379,7 +540,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGachaRecordListResponseList'
+                $ref: '#/components/schemas/PaginatedGachaDrawRecordList'
           description: ''
   /api/v1/gacha/records/{id}/:
     get:
@@ -433,84 +594,6 @@ paths:
                         total: 58
                         completed: 41
           description: ''
-  /api/v1/shop/inventory/:
-    get:
-      operationId: shop_inventory_list
-      summary: 获取库存列表
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedInventoryListResponseList'
-          description: ''
-  /api/v1/shop/inventory/{id}/:
-    get:
-      operationId: shop_inventory_retrieve
-      summary: 获取单个库存道具
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 用户道具库存.
-        required: true
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InventoryDetailResponse'
-          description: ''
-  /api/v1/shop/inventory/{id}/use/:
-    post:
-      operationId: shop_inventory_use_create
-      description: 当前支持主动使用还债卡，使用后会清空一级货币负债并扣除一张卡。
-      summary: 使用库存道具
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 用户道具库存.
-        required: true
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/UserInventory'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InventoryUseResponse'
-          description: ''
   /api/v1/shop/items/:
     get:
       operationId: shop_items_list
@@ -532,162 +615,8 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedShopItemListResponseList'
+                $ref: '#/components/schemas/PaginatedWishItemList'
           description: ''
-    post:
-      operationId: shop_items_create
-      description: 创建可购买商品。养成材料需要配置 effect_payload.experience；功能轻道具会购买后进入库存。
-      summary: 创建商店商品
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-            examples:
-              创建经验材料:
-                value:
-                  title: 小份经验书
-                  category: growth_material
-                  item_kind: experience_pack
-                  rarity: common
-                  price_tier: small
-                  price_secondary: 40
-                  effect_payload:
-                    experience: 50
-                  inventory: null
-                  is_enabled: true
-              创建还债卡:
-                value:
-                  title: 还债卡
-                  category: utility_item
-                  item_kind: debt_repayment_card
-                  rarity: rare
-                  price_tier: medium
-                  price_secondary: 180
-                  inventory: 10
-                  is_enabled: true
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ShopItemCreateResponse'
-          description: ''
-  /api/v1/shop/items/{id}/:
-    get:
-      operationId: shop_items_retrieve
-      summary: 获取单个商店商品
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 商店商品.
-        required: true
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ShopItemDetailResponse'
-          description: ''
-    put:
-      operationId: shop_items_update
-      summary: 更新商店商品
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 商店商品.
-        required: true
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WishItem'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WishItem'
-          description: ''
-    patch:
-      operationId: shop_items_partial_update
-      summary: 部分更新商店商品
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 商店商品.
-        required: true
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedWishItem'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedWishItem'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedWishItem'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WishItem'
-          description: ''
-    delete:
-      operationId: shop_items_destroy
-      summary: 删除商店商品
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 商店商品.
-        required: true
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /api/v1/shop/items/{id}/redeem/:
     post:
       operationId: shop_items_redeem_create
@@ -723,50 +652,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ShopItemRedeemResponse'
           description: ''
-  /api/v1/shop/items/meta/:
-    get:
-      operationId: shop_items_meta_retrieve
-      description: 返回商品大类、商品类型、稀有度和价格档位，供前端渲染商店表单和筛选器。
-      summary: 获取商店元信息
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ShopMetaResponse'
-          description: ''
-  /api/v1/shop/items/pricing/preview/:
-    post:
-      operationId: shop_items_pricing_preview_create
-      description: 根据价格档位返回裁剪后的合法价格。
-      summary: 预览价格边界裁剪
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WishPricingPreview'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/WishPricingPreview'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/WishPricingPreview'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ShopPricingPreviewResponse'
-          description: ''
   /api/v1/shop/redemptions/:
     get:
       operationId: shop_redemptions_list
@@ -787,29 +672,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedRedemptionRecordListResponseList'
-          description: ''
-  /api/v1/shop/redemptions/{id}/:
-    get:
-      operationId: shop_redemptions_retrieve
-      summary: 获取单条兑换/购买记录
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 兑换记录.
-        required: true
-      tags:
-      - Shop
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RedemptionRecordDetailResponse'
+                $ref: '#/components/schemas/PaginatedRedemptionRecordList'
           description: ''
   /api/v1/shop/redemptions/{id}/fulfill/:
     post:
@@ -844,39 +707,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/RedemptionFulfillResponse'
           description: ''
-  /api/v1/shop/redemptions/{id}/reject/:
-    post:
-      operationId: shop_redemptions_reject_create
-      summary: 拒绝愿望奖励记录
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 兑换记录.
-        required: true
-      tags:
-      - Shop
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RedemptionAction'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/RedemptionAction'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/RedemptionAction'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RedemptionRejectResponse'
-          description: ''
   /api/v1/tasks/tasks/:
     get:
       operationId: tasks_tasks_list
@@ -898,7 +728,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTaskListResponseList'
+                $ref: '#/components/schemas/PaginatedTaskList'
           description: ''
     post:
       operationId: tasks_tasks_create
@@ -985,7 +815,7 @@ paths:
           description: ''
     put:
       operationId: tasks_tasks_update
-      summary: 更新任务
+      summary: 更新任务模板
       parameters:
       - in: path
         name: id
@@ -999,13 +829,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
         required: true
       security:
       - jwtAuth: []
@@ -1014,11 +844,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskUpdate'
           description: ''
     patch:
       operationId: tasks_tasks_partial_update
-      summary: 部分更新任务
+      summary: 部分更新任务模板
       parameters:
       - in: path
         name: id
@@ -1032,13 +862,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
       security:
       - jwtAuth: []
       responses:
@@ -1046,7 +876,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskUpdate'
           description: ''
     delete:
       operationId: tasks_tasks_destroy
@@ -1177,6 +1007,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskPricingRequestResponse'
+          description: ''
+  /api/v1/tasks/tasks/{id}/progress/:
+    patch:
+      operationId: tasks_tasks_progress_partial_update
+      description: 更新指定日期任务实例的实际完成进度；不传 occurrence_date 时默认更新今天。任务模板中的 progress_target
+        是目标值，不用于记录实际进度。
+      summary: 更新任务实际进度
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+            examples:
+              更新今天的任务进度:
+                value:
+                  progress: 60
+              更新指定日期的任务进度:
+                value:
+                  occurrence_date: '2026-06-03'
+                  progress: 80
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskProgressUpdateResponse'
           description: ''
   /api/v1/tasks/tasks/history/:
     get:
@@ -1858,13 +1731,48 @@ components:
       - data
       - message
       - success
-    AIReportJobListResponse:
+    AIReportJobStatusEnum:
+      enum:
+      - pending
+      - done
+      - failed
+      type: string
+      description: |-
+        * `pending` - 待生成
+        * `done` - 已完成
+        * `failed` - 失败
+    AITaskPricingFeedback:
+      type: object
+      properties:
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          description: |-
+            accept 表示接受当前定价并创建任务；revise 表示提交反馈并重新定价。
+
+            * `accept` - accept
+            * `revise` - revise
+        feedback_direction:
+          description: |-
+            revise 时可传：too_high 偏高；too_low 偏低；detail 详细说明。
+
+            * `too_high` - too_high
+            * `too_low` - too_low
+            * `detail` - detail
+          oneOf:
+          - $ref: '#/components/schemas/FeedbackDirectionEnum'
+          - $ref: '#/components/schemas/BlankEnum'
+        feedback_text:
+          type: string
+          description: 用户对当前定价的自然语言反馈。
+          maxLength: 1000
+      required:
+      - action
+    AITaskPricingFeedbackResponse:
       type: object
       properties:
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AIReportJob'
+          $ref: '#/components/schemas/AITaskPricingSession'
         success:
           type: boolean
         code:
@@ -1876,16 +1784,136 @@ components:
       - data
       - message
       - success
-    AIReportJobStatusEnum:
+    AITaskPricingSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        created_task:
+          allOf:
+          - $ref: '#/components/schemas/Task'
+          readOnly: true
+        quote_payload:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingQuotePayload'
+          readOnly: true
+          description: '当前 AI 定价结果。包含 reward_primary、penalty_primary、price_tier、confidence、reasoning、risk_notes、user_fit_notes、pricing_bounds
+            和 llm_style_payload。pricing_bounds 用于限制反馈调整范围，结构为 {reward_primary: {min,
+            max, recommended}, penalty_primary: {min, max, recommended}}。'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AITaskPricingSessionStatusEnum'
+          readOnly: true
+        task_payload:
+          title: 任务草稿
+        profile_snapshot:
+          readOnly: true
+          title: 用户画像快照
+        pricing_standard_version:
+          type: string
+          readOnly: true
+        pricing_standard_excerpt:
+          type: string
+          readOnly: true
+          title: 定价标准摘录
+        feedback_history:
+          readOnly: true
+          title: 反馈历史
+        dynamic_profile_update:
+          readOnly: true
+          title: 动态画像更新
+        error_message:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+      required:
+      - created_at
+      - created_task
+      - dynamic_profile_update
+      - error_message
+      - feedback_history
+      - id
+      - owner
+      - pricing_standard_excerpt
+      - pricing_standard_version
+      - profile_snapshot
+      - quote_payload
+      - status
+      - updated_at
+    AITaskPricingSessionCreate:
+      type: object
+      properties:
+        task_payload:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingDraft'
+          description: 待定价任务草稿。
+      required:
+      - task_payload
+    AITaskPricingSessionCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSessionDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AITaskPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AITaskPricingSessionStatusEnum:
       enum:
-      - pending
-      - done
+      - waiting_feedback
+      - accepted
+      - cancelled
       - failed
       type: string
       description: |-
-        * `pending` - 待生成
-        * `done` - 已完成
+        * `waiting_feedback` - 等待反馈
+        * `accepted` - 已接受
+        * `cancelled` - 已取消
         * `failed` - 失败
+    ActionEnum:
+      enum:
+      - accept
+      - revise
+      type: string
+      description: |-
+        * `accept` - accept
+        * `revise` - revise
     AvailableTimeLevelEnum:
       enum:
       - limited
@@ -1903,14 +1931,18 @@ components:
       - ''
     CategoryEnum:
       enum:
-      - growth_material
-      - utility_item
-      - wish_reward
+      - experience_pack
+      - debt_repayment_card
+      - task_failure_protection_card
+      - indulgence_day_card
+      - wish
       type: string
       description: |-
-        * `growth_material` - 养成材料
-        * `utility_item` - 功能轻道具
-        * `wish_reward` - 愿望奖励
+        * `experience_pack` - 经验材料
+        * `debt_repayment_card` - 还债卡
+        * `task_failure_protection_card` - 任务失败保护卡
+        * `indulgence_day_card` - 放纵日卡
+        * `wish` - 愿望奖励
     ChronotypeEnum:
       enum:
       - morning
@@ -2107,6 +2139,16 @@ components:
         * `working` - 已工作
         * `other` - 其他
         * `undisclosed` - 暂不填写
+    FeedbackDirectionEnum:
+      enum:
+      - too_high
+      - too_low
+      - detail
+      type: string
+      description: |-
+        * `too_high` - too_high
+        * `too_low` - too_low
+        * `detail` - detail
     FocusAreasEnum:
       enum:
       - exam
@@ -2291,24 +2333,6 @@ components:
       - data
       - message
       - success
-    GachaPoolListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaPool'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     GachaPoolUserState:
       type: object
       properties:
@@ -2337,24 +2361,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/GachaDrawRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    GachaRecordListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaDrawRecord'
         success:
           type: boolean
         code:
@@ -2409,70 +2415,6 @@ components:
       - data
       - message
       - success
-    InventoryDetailResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/UserInventory'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    InventoryListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserInventory'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    InventoryUseResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/UserInventory'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ItemKindEnum:
-      enum:
-      - experience_pack
-      - debt_repayment_card
-      - task_failure_protection_card
-      - indulgence_day_card
-      - wish
-      type: string
-      description: |-
-        * `experience_pack` - 经验材料
-        * `debt_repayment_card` - 还债卡
-        * `task_failure_protection_card` - 任务失败保护卡
-        * `indulgence_day_card` - 放纵日卡
-        * `wish` - 愿望
     JWTToken:
       type: object
       properties:
@@ -2675,167 +2617,279 @@ components:
         * `retired` - 退休
         * `other` - 其他
         * `undisclosed` - 暂不填写
-    PaginatedAIReportJobListResponseList:
+    PaginatedAIReportJobList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/AIReportJobListResponse'
-    PaginatedGachaPoolListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/AIReportJob'
+    PaginatedAITaskPricingSessionList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaPoolListResponse'
-    PaginatedGachaRecordListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/AITaskPricingSession'
+    PaginatedGachaDrawRecordList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaRecordListResponse'
-    PaginatedInventoryListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/GachaDrawRecord'
+    PaginatedGachaPoolList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/InventoryListResponse'
-    PaginatedRedemptionRecordListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/GachaPool'
+    PaginatedRedemptionRecordList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/RedemptionRecordListResponse'
-    PaginatedShopItemListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/RedemptionRecord'
+    PaginatedTaskList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ShopItemListResponse'
-    PaginatedTaskListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/Task'
+    PaginatedWishItemList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskListResponse'
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/WishItem'
     PatchedAIReportJob:
       type: object
       properties:
@@ -3041,7 +3095,18 @@ components:
         should_prompt:
           type: boolean
           readOnly: true
-    PatchedTask:
+    PatchedTaskProgressUpdate:
+      type: object
+      properties:
+        occurrence_date:
+          type: string
+          format: date
+          description: 要更新进度的任务实例日期，默认今天。
+        progress:
+          type: integer
+          minimum: 0
+          description: 任务实例的实际完成进度，不能超过任务的 progress_target。
+    PatchedTaskUpdate:
       type: object
       properties:
         id:
@@ -3093,11 +3158,6 @@ components:
         target_value:
           type: integer
           nullable: true
-        progress_target:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 进度目标
         reward_primary:
           type: integer
           maximum: 2147483647
@@ -3143,7 +3203,7 @@ components:
           nullable: true
           title: 截止时间
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          $ref: '#/components/schemas/StatusCa7Enum'
         tags:
           title: 标签
         ai_metadata:
@@ -3158,75 +3218,16 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
-    PatchedWishItem:
-      type: object
-      properties:
-        id:
+        progress:
           type: integer
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 创建时间
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 更新时间
-        title:
-          type: string
-          title: 商品名称
-          maxLength: 120
-        description:
-          type: string
-          title: 商品描述
-        category:
-          allOf:
-          - $ref: '#/components/schemas/CategoryEnum'
-          title: 商品大类
-        item_kind:
-          allOf:
-          - $ref: '#/components/schemas/ItemKindEnum'
-          title: 商品类型
-        rarity:
-          allOf:
-          - $ref: '#/components/schemas/RarityEnum'
-          title: 稀有度
-        source:
-          $ref: '#/components/schemas/SourceEnum'
-        price_tier:
-          allOf:
-          - $ref: '#/components/schemas/PriceTierEnum'
-          title: 价格档位
-        price_secondary:
-          type: integer
-          maximum: 2147483647
           minimum: 0
-          title: 二级货币定价
-        inventory:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          nullable: true
-          title: 库存
-        is_enabled:
-          type: boolean
-          title: 是否上架
-        is_stackable:
-          type: boolean
-          title: 是否可叠加持有
-        auto_refund_on_reject:
-          type: boolean
-          title: 拒绝时自动退款
-        ai_pricing:
-          title: AI 定价数据
-        effect_payload:
-          title: 效果配置
-        owner:
-          type: integer
-          readOnly: true
-          title: 所属用户
+          writeOnly: true
+          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+        occurrence_date:
+          type: string
+          format: date
+          writeOnly: true
+          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
     PenaltyToleranceEnum:
       enum:
       - low
@@ -3517,40 +3518,6 @@ components:
       - item
       - owner
       - updated_at
-    RedemptionRecordDetailResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/RedemptionRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    RedemptionRecordListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/RedemptionRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     RedemptionRecordStatusEnum:
       enum:
       - requested
@@ -3563,22 +3530,6 @@ components:
         * `completed` - 已完成
         * `fulfilled` - 已兑现
         * `rejected` - 已拒绝
-    RedemptionRejectResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/RedemptionRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     Register:
       type: object
       properties:
@@ -3704,107 +3655,11 @@ components:
       description: |-
         * `regular` - 常规轨道
         * `exploration` - 探索轨道
-    ShopItemCreateResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/WishItem'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ShopItemDetailResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/WishItem'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ShopItemListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/WishItem'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     ShopItemRedeemResponse:
       type: object
       properties:
         data:
           $ref: '#/components/schemas/RedemptionRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ShopMeta:
-      type: object
-      properties:
-        categories: {}
-        item_kinds: {}
-        rarities: {}
-        tiers: {}
-        bounds: {}
-      required:
-      - bounds
-      - categories
-      - item_kinds
-      - rarities
-      - tiers
-    ShopMetaResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/ShopMeta'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ShopPricingPreviewResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/WishPricingPreviewPayload'
         success:
           type: boolean
         code:
@@ -3828,14 +3683,6 @@ components:
         * `medium` - 一般
         * `high` - 高/较好
         * `undisclosed` - 暂不填写
-    SourceEnum:
-      enum:
-      - manual
-      - system
-      type: string
-      description: |-
-        * `manual` - 用户创建
-        * `system` - 系统推荐
     StableProfile:
       type: object
       properties:
@@ -3945,6 +3792,14 @@ components:
       - data
       - message
       - success
+    StatusCa7Enum:
+      enum:
+      - active
+      - archived
+      type: string
+      description: |-
+        * `active` - 启用
+        * `archived` - 归档
     StressSensitivityEnum:
       enum:
       - low
@@ -4059,7 +3914,7 @@ components:
           nullable: true
           title: 截止时间
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          $ref: '#/components/schemas/StatusCa7Enum'
         tags:
           title: 标签
         ai_metadata:
@@ -4146,24 +4001,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaskOccurrence'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    TaskListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Task'
         success:
           type: boolean
         code:
@@ -4271,6 +4108,137 @@ components:
       - data
       - message
       - success
+    TaskPricingBoundValue:
+      type: object
+      properties:
+        min:
+          type: integer
+          description: 当前任务建议范围下限。
+        max:
+          type: integer
+          description: 当前任务建议范围上限。
+        recommended:
+          type: integer
+          description: 本轮推荐值。
+      required:
+      - max
+      - min
+      - recommended
+    TaskPricingBounds:
+      type: object
+      properties:
+        reward_primary:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBoundValue'
+          description: 一级货币奖励建议范围。
+        penalty_primary:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBoundValue'
+          description: 失败惩罚建议范围。
+      required:
+      - penalty_primary
+      - reward_primary
+    TaskPricingDraft:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 任务标题。
+          maxLength: 120
+        description:
+          type: string
+          default: ''
+          description: 任务详细说明。
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          description: |-
+            任务类型：daily / recurring / one_time。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
+        recurrence:
+          allOf:
+          - $ref: '#/components/schemas/RecurrenceEnum'
+          default: none
+          description: |-
+            重复规则：none / daily / weekly / monthly。
+
+            * `none` - 不重复
+            * `daily` - 每天
+            * `weekly` - 每周
+            * `monthly` - 每月
+        settlement_track:
+          allOf:
+          - $ref: '#/components/schemas/SettlementTrackEnum'
+          default: regular
+          description: |-
+            结算轨道：regular 常规轨道；exploration 探索轨道。
+
+            * `regular` - 常规轨道
+            * `exploration` - 探索轨道
+        difficulty_level:
+          allOf:
+          - $ref: '#/components/schemas/DifficultyLevelEnum'
+          default: medium
+          description: |-
+            难度：low / medium / high。
+
+            * `low` - 低
+            * `medium` - 中
+            * `high` - 高
+        estimated_focus_minutes:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 探索轨道必填，表示预计专注分钟数。
+        weekdays:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: weekly 任务使用，0=周一，6=周日。
+        month_days:
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: monthly 任务使用，例如 [1, 15, 28]。
+        metric_key:
+          type: string
+          default: ''
+          maxLength: 50
+        target_value:
+          type: integer
+          nullable: true
+        progress_target:
+          type: integer
+          minimum: 1
+          default: 100
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+        ai_metadata: {}
+      required:
+      - task_type
+      - title
     TaskPricingMeta:
       type: object
       properties:
@@ -4381,11 +4349,72 @@ components:
       - data
       - message
       - success
+    TaskPricingQuotePayload:
+      type: object
+      properties:
+        reward_primary:
+          type: integer
+          description: 本轮建议的一级货币奖励。
+        penalty_primary:
+          type: integer
+          description: 本轮建议的失败惩罚。
+        price_tier:
+          type: string
+          description: 定价档位，例如 small / medium。
+        confidence:
+          type: number
+          format: double
+          description: 报价置信度，0-1。
+        reasoning:
+          type: string
+          description: 展示给用户的定价理由。
+        risk_notes:
+          type: array
+          items:
+            type: string
+          description: 风险或缺失信息提示。
+        user_fit_notes:
+          type: array
+          items:
+            type: string
+          description: 结合用户画像或反馈生成的说明。
+        pricing_bounds:
+          allOf:
+          - $ref: '#/components/schemas/TaskPricingBounds'
+          description: 反馈调整时使用的建议范围。
+        llm_style_payload:
+          description: 模型/规则辅助元数据。
+      required:
+      - confidence
+      - llm_style_payload
+      - penalty_primary
+      - price_tier
+      - pricing_bounds
+      - reasoning
+      - reward_primary
+      - risk_notes
+      - user_fit_notes
     TaskPricingRequestResponse:
       type: object
       properties:
         data:
           $ref: '#/components/schemas/Task'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    TaskProgressUpdateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TaskOccurrence'
         success:
           type: boolean
         code:
@@ -4413,14 +4442,6 @@ components:
       - data
       - message
       - success
-    TaskStatusEnum:
-      enum:
-      - active
-      - archived
-      type: string
-      description: |-
-        * `active` - 启用
-        * `archived` - 归档
     TaskTodayResponse:
       type: object
       properties:
@@ -4449,6 +4470,138 @@ components:
         * `daily` - 日常任务
         * `recurring` - 周期任务
         * `one_time` - 一次性任务
+    TaskUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          description: 任务标题。
+          maxLength: 120
+        description:
+          type: string
+          description: 任务详细说明，可为空。
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          title: 任务类型
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceEnum'
+        settlement_track:
+          allOf:
+          - $ref: '#/components/schemas/SettlementTrackEnum'
+          title: 结算轨道
+        difficulty_level:
+          allOf:
+          - $ref: '#/components/schemas/DifficultyLevelEnum'
+          title: 难度等级
+        estimated_focus_minutes:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 探索轨道任务可填写的预估专注时长（分钟）。
+        weekdays:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: weekly 任务使用，0=周一，6=周日。
+        month_days:
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: monthly 任务使用，例如 [1, 15, 28]。
+        metric_key:
+          type: string
+          maxLength: 50
+        target_value:
+          type: integer
+          nullable: true
+        reward_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币奖励
+        penalty_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币惩罚
+        pricing_status:
+          allOf:
+          - $ref: '#/components/schemas/PricingStatusEnum'
+          readOnly: true
+          title: 定价状态
+        pricing_requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 发起定价时间
+        pricing_resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 完成定价时间
+        pricing_snapshot:
+          readOnly: true
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+          title: 开始日期
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 截止时间
+        status:
+          $ref: '#/components/schemas/StatusCa7Enum'
+        tags:
+          title: 标签
+        ai_metadata:
+          title: AI 元数据
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        progress:
+          type: integer
+          minimum: 0
+          writeOnly: true
+          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+        occurrence_date:
+          type: string
+          format: date
+          writeOnly: true
+          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
+      required:
+      - created_at
+      - id
+      - pricing_requested_at
+      - pricing_resolved_at
+      - pricing_snapshot
+      - pricing_status
+      - task_type
+      - title
+      - updated_at
     TokenRefresh:
       type: object
       properties:
@@ -4590,36 +4743,6 @@ components:
       - prompt_profile
       - total_experience
       - username
-    UserInventory:
-      type: object
-      properties:
-        id:
-          type: integer
-          readOnly: true
-        item:
-          allOf:
-          - $ref: '#/components/schemas/WishItem'
-          readOnly: true
-        quantity:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 持有数量
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 创建时间
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-          title: 更新时间
-      required:
-      - created_at
-      - id
-      - item
-      - updated_at
     Wallet:
       type: object
       properties:
@@ -4784,6 +4907,10 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        catalog_key:
+          type: string
+          title: 目录键
+          maxLength: 64
         title:
           type: string
           title: 商品名称
@@ -4794,17 +4921,11 @@ components:
         category:
           allOf:
           - $ref: '#/components/schemas/CategoryEnum'
-          title: 商品大类
-        item_kind:
-          allOf:
-          - $ref: '#/components/schemas/ItemKindEnum'
-          title: 商品类型
+          title: 商品分类
         rarity:
           allOf:
           - $ref: '#/components/schemas/RarityEnum'
           title: 稀有度
-        source:
-          $ref: '#/components/schemas/SourceEnum'
         price_tier:
           allOf:
           - $ref: '#/components/schemas/PriceTierEnum'
@@ -4829,13 +4950,12 @@ components:
         auto_refund_on_reject:
           type: boolean
           title: 拒绝时自动退款
-        ai_pricing:
-          title: AI 定价数据
         effect_payload:
           title: 效果配置
         owner:
           type: integer
           readOnly: true
+          nullable: true
           title: 所属用户
       required:
       - created_at
@@ -4844,32 +4964,6 @@ components:
       - price_secondary
       - title
       - updated_at
-    WishPricingPreview:
-      type: object
-      properties:
-        price_tier:
-          $ref: '#/components/schemas/PriceTierEnum'
-        suggested_price:
-          type: integer
-          minimum: 0
-      required:
-      - price_tier
-      - suggested_price
-    WishPricingPreviewPayload:
-      type: object
-      properties:
-        price_tier:
-          $ref: '#/components/schemas/PriceTierEnum'
-        requested_price:
-          type: integer
-        clamped_price:
-          type: integer
-        bounds: {}
-      required:
-      - bounds
-      - clamped_price
-      - price_tier
-      - requested_price
   securitySchemes:
     jwtAuth:
       type: http
