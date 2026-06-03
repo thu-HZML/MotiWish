@@ -1,4 +1,5 @@
 from django.contrib import admin
+from apps.shop.models import UserActiveEffect
 from apps.shop.models import WishItem, RedemptionRecord, UserInventory
 
 
@@ -53,3 +54,13 @@ class RedemptionRecordAdmin(admin.ModelAdmin):
 class UserInventoryAdmin(admin.ModelAdmin):
     list_display = ("id", "owner", "item", "quantity", "updated_at")
     search_fields = ("owner__username", "item__title")
+
+@admin.register(UserActiveEffect)
+class UserActiveEffectAdmin(admin.ModelAdmin):
+    list_display = ("id", "owner", "effect_type", "starts_at", "expires_at", "is_currently_active")
+    list_filter = ("effect_type", "starts_at", "expires_at")
+    search_fields = ("owner__username", "effect_type")
+
+    @admin.display(boolean=True, description="当前是否生效")
+    def is_currently_active(self, obj):
+        return obj.is_active()
