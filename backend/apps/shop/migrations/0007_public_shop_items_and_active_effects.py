@@ -6,6 +6,7 @@ import django.db.models.deletion
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -48,7 +49,11 @@ class Migration(migrations.Migration):
                             WHEN category = 'wish_reward' THEN 'wish'
                             ELSE category
                         END;
-
+                    """,
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+                migrations.RunSQL(
+                    sql="""
                         ALTER TABLE shop_wishitem DROP COLUMN IF EXISTS ai_pricing;
                         ALTER TABLE shop_wishitem DROP COLUMN IF EXISTS item_kind;
                         ALTER TABLE shop_wishitem DROP COLUMN IF EXISTS source;
