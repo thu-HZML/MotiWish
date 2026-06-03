@@ -38,6 +38,7 @@ fun StoreScreen(
 
     LaunchedEffect(Unit) {
         currencyViewModel.refreshWallet()
+        shopViewModel.fetchRealShopItems()
     }
 
     // 监听两个 ViewModel 的消息
@@ -59,7 +60,7 @@ fun StoreScreen(
                     IconButton(onClick = { navController.navigate("addWish?wishId=-1") }) {
                         Icon(Icons.Default.Add, contentDescription = "添加愿望")
                     }
-                    IconButton(onClick = { shopViewModel.refreshSystemWish() }) {
+                    IconButton(onClick = { shopViewModel.fetchRealShopItems() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
                 },
