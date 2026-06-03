@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
+from apps.shop.catalog import DEFAULT_SHOP_ITEMS
 from apps.shop.models import RedemptionRecord, UserInventory, WishItem
 from apps.shop.serializers import (
     RedemptionActionSerializer,
@@ -41,7 +42,8 @@ class WishItemViewSet(ApiResponseMixin, mixins.ListModelMixin, viewsets.GenericV
             models.Q(owner=self.request.user) | models.Q(owner__isnull=True),
             is_enabled=True
         )
-        
+        default_catalog_keys = [item["catalog_key"] for item in DEFAULT_SHOP_ITEMS]
+        queryset = queryset.exclude(owner=self.request.user, catalog_key__in=default_catalog_keys)
 
         category = self.request.query_params.get("category")
         item_kind = self.request.query_params.get("item_kind")
