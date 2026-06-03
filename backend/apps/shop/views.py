@@ -31,7 +31,7 @@ from apps.shop.services import (
         tags=["Shop"],
         summary="获取商店商品列表",
         description="返回当前用户的商店商品，支持养成材料、功能轻道具和愿望奖励。",
-        responses=api_envelope_serializer("ShopItemListResponse", WishItemSerializer(many=True)),
+        responses=WishItemSerializer(many=True),
     ),
     create=extend_schema(
         tags=["Shop"],
@@ -146,7 +146,7 @@ class WishItemViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     list=extend_schema(
         tags=["Shop"],
         summary="获取库存列表",
-        responses=api_envelope_serializer("InventoryListResponse", UserInventorySerializer(many=True)),
+        responses=UserInventorySerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["Shop"],
@@ -178,7 +178,7 @@ class UserInventoryViewSet(ApiResponseMixin, viewsets.ReadOnlyModelViewSet):
     list=extend_schema(
         tags=["Shop"],
         summary="获取兑换/购买记录",
-        responses=api_envelope_serializer("RedemptionRecordListResponse", RedemptionRecordSerializer(many=True)),
+        responses=RedemptionRecordSerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["Shop"],

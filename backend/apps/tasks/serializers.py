@@ -118,6 +118,47 @@ class TaskSerializer(serializers.ModelSerializer):
         return attrs
 
 
+class TaskUpdateSerializer(TaskSerializer):
+    progress = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        write_only=True,
+        help_text="任务实例的实际完成进度，默认更新今天的任务实例。",
+    )
+    occurrence_date = serializers.DateField(
+        required=False,
+        write_only=True,
+        help_text="要更新进度的任务实例日期，仅在同时提交 progress 时使用。",
+    )
+
+    class Meta(TaskSerializer.Meta):
+        fields = (
+            *(field for field in TaskSerializer.Meta.fields if field != "progress_target"),
+            "progress",
+            "occurrence_date",
+        )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if "progress_target" in self.initial_data:
+            raise serializers.ValidationError(
+                {"progress_target": "更新任务时不能修改进度目标；请使用 progress 更新实际进度。"}
+            )
+        if "occurrence_date" in attrs and "progress" not in attrs:
+            raise serializers.ValidationError({"progress": "提交 occurrence_date 时必须同时提交 progress。"})
+        return attrs
+
+    def update(self, instance, validated_data):
+        progress = validated_data.pop("progress", None)
+        occurrence_date = validated_data.pop("occurrence_date", None)
+        instance = super().update(instance, validated_data)
+        if progress is not None:
+            from apps.tasks.services import update_task_progress
+
+            update_task_progress(task=instance, progress=progress, target_date=occurrence_date)
+        return instance
+
+
 class TaskOccurrenceSerializer(serializers.ModelSerializer):
     task = TaskSerializer(read_only=True)
 
@@ -143,6 +184,17 @@ class TaskActionSerializer(serializers.Serializer):
         required=False,
         min_value=0,
         help_text="本次完成时写入的进度值；不传则自动使用任务的 progress_target。",
+    )
+
+
+class TaskProgressUpdateSerializer(serializers.Serializer):
+    occurrence_date = serializers.DateField(
+        required=False,
+        help_text="要更新进度的任务实例日期，默认今天。",
+    )
+    progress = serializers.IntegerField(
+        min_value=0,
+        help_text="任务实例的实际完成进度，不能超过任务的 progress_target。",
     )
 
 

@@ -24,7 +24,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedAIReportJobListResponseList'
+                $ref: '#/components/schemas/PaginatedAIReportJobList'
           description: ''
     post:
       operationId: ai_report_jobs_create
@@ -76,6 +76,7 @@ paths:
           description: ''
     put:
       operationId: ai_report_jobs_update
+      summary: 更新 AI 报告任务
       parameters:
       - in: path
         name: id
@@ -84,7 +85,7 @@ paths:
         description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
-      - ai
+      - AI
       requestBody:
         content:
           application/json:
@@ -108,6 +109,7 @@ paths:
           description: ''
     patch:
       operationId: ai_report_jobs_partial_update
+      summary: 部分更新 AI 报告任务
       parameters:
       - in: path
         name: id
@@ -116,7 +118,7 @@ paths:
         description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
-      - ai
+      - AI
       requestBody:
         content:
           application/json:
@@ -139,6 +141,7 @@ paths:
           description: ''
     delete:
       operationId: ai_report_jobs_destroy
+      summary: 删除 AI 报告任务
       parameters:
       - in: path
         name: id
@@ -147,7 +150,7 @@ paths:
         description: A unique integer value identifying this AI 报告任务.
         required: true
       tags:
-      - ai
+      - AI
       security:
       - jwtAuth: []
       responses:
@@ -173,7 +176,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedAITaskPricingSessionListResponseList'
+                $ref: '#/components/schemas/PaginatedAITaskPricingSessionList'
           description: ''
     post:
       operationId: ai_task_pricing_sessions_create
@@ -426,7 +429,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGachaPoolListResponseList'
+                $ref: '#/components/schemas/PaginatedGachaPoolList'
           description: ''
   /api/v1/gacha/pools/{id}/:
     get:
@@ -537,7 +540,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedGachaRecordListResponseList'
+                $ref: '#/components/schemas/PaginatedGachaDrawRecordList'
           description: ''
   /api/v1/gacha/records/{id}/:
     get:
@@ -611,7 +614,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedInventoryListResponseList'
+                $ref: '#/components/schemas/PaginatedUserInventoryList'
           description: ''
   /api/v1/shop/inventory/{id}/:
     get:
@@ -690,7 +693,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedShopItemListResponseList'
+                $ref: '#/components/schemas/PaginatedWishItemList'
           description: ''
     post:
       operationId: shop_items_create
@@ -945,7 +948,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedRedemptionRecordListResponseList'
+                $ref: '#/components/schemas/PaginatedRedemptionRecordList'
           description: ''
   /api/v1/shop/redemptions/{id}/:
     get:
@@ -1056,7 +1059,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTaskListResponseList'
+                $ref: '#/components/schemas/PaginatedTaskList'
           description: ''
     post:
       operationId: tasks_tasks_create
@@ -1143,7 +1146,7 @@ paths:
           description: ''
     put:
       operationId: tasks_tasks_update
-      summary: 更新任务
+      summary: 更新任务模板
       parameters:
       - in: path
         name: id
@@ -1157,13 +1160,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Task'
+              $ref: '#/components/schemas/TaskUpdate'
         required: true
       security:
       - jwtAuth: []
@@ -1172,11 +1175,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskUpdate'
           description: ''
     patch:
       operationId: tasks_tasks_partial_update
-      summary: 部分更新任务
+      summary: 部分更新任务模板
       parameters:
       - in: path
         name: id
@@ -1190,13 +1193,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedTask'
+              $ref: '#/components/schemas/PatchedTaskUpdate'
       security:
       - jwtAuth: []
       responses:
@@ -1204,7 +1207,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Task'
+                $ref: '#/components/schemas/TaskUpdate'
           description: ''
     delete:
       operationId: tasks_tasks_destroy
@@ -1335,6 +1338,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TaskPricingRequestResponse'
+          description: ''
+  /api/v1/tasks/tasks/{id}/progress/:
+    patch:
+      operationId: tasks_tasks_progress_partial_update
+      description: 更新指定日期任务实例的实际完成进度；不传 occurrence_date 时默认更新今天。任务模板中的 progress_target
+        是目标值，不用于记录实际进度。
+      summary: 更新任务实际进度
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 任务.
+        required: true
+      tags:
+      - Tasks
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+            examples:
+              更新今天的任务进度:
+                value:
+                  progress: 60
+              更新指定日期的任务进度:
+                value:
+                  occurrence_date: '2026-06-03'
+                  progress: 80
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskProgressUpdate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskProgressUpdateResponse'
           description: ''
   /api/v1/tasks/tasks/history/:
     get:
@@ -2016,24 +2062,6 @@ components:
       - data
       - message
       - success
-    AIReportJobListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AIReportJob'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     AIReportJobStatusEnum:
       enum:
       - pending
@@ -2186,24 +2214,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/AITaskPricingSession'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    AITaskPricingSessionListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/AITaskPricingSession'
         success:
           type: boolean
         code:
@@ -2650,24 +2660,6 @@ components:
       - data
       - message
       - success
-    GachaPoolListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaPool'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     GachaPoolUserState:
       type: object
       properties:
@@ -2696,24 +2688,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/GachaDrawRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    GachaRecordListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaDrawRecord'
         success:
           type: boolean
         code:
@@ -2773,24 +2747,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/UserInventory'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    InventoryListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/UserInventory'
         success:
           type: boolean
         code:
@@ -3034,190 +2990,318 @@ components:
         * `retired` - 退休
         * `other` - 其他
         * `undisclosed` - 暂不填写
-    PaginatedAIReportJobListResponseList:
+    PaginatedAIReportJobList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/AIReportJobListResponse'
-    PaginatedAITaskPricingSessionListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/AIReportJob'
+    PaginatedAITaskPricingSessionList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/AITaskPricingSessionListResponse'
-    PaginatedGachaPoolListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/AITaskPricingSession'
+    PaginatedGachaDrawRecordList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaPoolListResponse'
-    PaginatedGachaRecordListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/GachaDrawRecord'
+    PaginatedGachaPoolList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/GachaRecordListResponse'
-    PaginatedInventoryListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/GachaPool'
+    PaginatedRedemptionRecordList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/InventoryListResponse'
-    PaginatedRedemptionRecordListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/RedemptionRecord'
+    PaginatedTaskList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/RedemptionRecordListResponse'
-    PaginatedShopItemListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/Task'
+    PaginatedUserInventoryList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/ShopItemListResponse'
-    PaginatedTaskListResponseList:
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/UserInventory'
+    PaginatedWishItemList:
       type: object
       required:
-      - count
-      - results
+      - success
+      - code
+      - message
+      - data
       properties:
-        count:
-          type: integer
-          example: 123
-        next:
+        success:
+          type: boolean
+        code:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=4
-        previous:
+        message:
           type: string
-          nullable: true
-          format: uri
-          example: http://api.example.org/accounts/?page=2
-        results:
-          type: array
-          items:
-            $ref: '#/components/schemas/TaskListResponse'
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/WishItem'
     PatchedAIReportJob:
       type: object
       properties:
@@ -3423,7 +3507,18 @@ components:
         should_prompt:
           type: boolean
           readOnly: true
-    PatchedTask:
+    PatchedTaskProgressUpdate:
+      type: object
+      properties:
+        occurrence_date:
+          type: string
+          format: date
+          description: 要更新进度的任务实例日期，默认今天。
+        progress:
+          type: integer
+          minimum: 0
+          description: 任务实例的实际完成进度，不能超过任务的 progress_target。
+    PatchedTaskUpdate:
       type: object
       properties:
         id:
@@ -3475,11 +3570,6 @@ components:
         target_value:
           type: integer
           nullable: true
-        progress_target:
-          type: integer
-          maximum: 2147483647
-          minimum: 0
-          title: 进度目标
         reward_primary:
           type: integer
           maximum: 2147483647
@@ -3525,7 +3615,7 @@ components:
           nullable: true
           title: 截止时间
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          $ref: '#/components/schemas/StatusCa7Enum'
         tags:
           title: 标签
         ai_metadata:
@@ -3540,6 +3630,16 @@ components:
           format: date-time
           readOnly: true
           title: 更新时间
+        progress:
+          type: integer
+          minimum: 0
+          writeOnly: true
+          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+        occurrence_date:
+          type: string
+          format: date
+          writeOnly: true
+          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
     PatchedWishItem:
       type: object
       properties:
@@ -3919,24 +4019,6 @@ components:
       - data
       - message
       - success
-    RedemptionRecordListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/RedemptionRecord'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     RedemptionRecordStatusEnum:
       enum:
       - requested
@@ -4111,24 +4193,6 @@ components:
       properties:
         data:
           $ref: '#/components/schemas/WishItem'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    ShopItemListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/WishItem'
         success:
           type: boolean
         code:
@@ -4331,6 +4395,14 @@ components:
       - data
       - message
       - success
+    StatusCa7Enum:
+      enum:
+      - active
+      - archived
+      type: string
+      description: |-
+        * `active` - 启用
+        * `archived` - 归档
     StressSensitivityEnum:
       enum:
       - low
@@ -4445,7 +4517,7 @@ components:
           nullable: true
           title: 截止时间
         status:
-          $ref: '#/components/schemas/TaskStatusEnum'
+          $ref: '#/components/schemas/StatusCa7Enum'
         tags:
           title: 标签
         ai_metadata:
@@ -4532,24 +4604,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaskOccurrence'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
-    TaskListResponse:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Task'
         success:
           type: boolean
         code:
@@ -4959,6 +5013,22 @@ components:
       - data
       - message
       - success
+    TaskProgressUpdateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/TaskOccurrence'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     TaskRetrieveResponse:
       type: object
       properties:
@@ -4975,14 +5045,6 @@ components:
       - data
       - message
       - success
-    TaskStatusEnum:
-      enum:
-      - active
-      - archived
-      type: string
-      description: |-
-        * `active` - 启用
-        * `archived` - 归档
     TaskTodayResponse:
       type: object
       properties:
@@ -5011,6 +5073,138 @@ components:
         * `daily` - 日常任务
         * `recurring` - 周期任务
         * `one_time` - 一次性任务
+    TaskUpdate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          description: 任务标题。
+          maxLength: 120
+        description:
+          type: string
+          description: 任务详细说明，可为空。
+        task_type:
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          title: 任务类型
+        recurrence:
+          $ref: '#/components/schemas/RecurrenceEnum'
+        settlement_track:
+          allOf:
+          - $ref: '#/components/schemas/SettlementTrackEnum'
+          title: 结算轨道
+        difficulty_level:
+          allOf:
+          - $ref: '#/components/schemas/DifficultyLevelEnum'
+          title: 难度等级
+        estimated_focus_minutes:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 探索轨道任务可填写的预估专注时长（分钟）。
+        weekdays:
+          type: array
+          items:
+            type: integer
+            maximum: 6
+            minimum: 0
+          description: weekly 任务使用，0=周一，6=周日。
+        month_days:
+          type: array
+          items:
+            type: integer
+            maximum: 31
+            minimum: 1
+          description: monthly 任务使用，例如 [1, 15, 28]。
+        metric_key:
+          type: string
+          maxLength: 50
+        target_value:
+          type: integer
+          nullable: true
+        reward_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币奖励
+        penalty_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 一级货币惩罚
+        pricing_status:
+          allOf:
+          - $ref: '#/components/schemas/PricingStatusEnum'
+          readOnly: true
+          title: 定价状态
+        pricing_requested_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 发起定价时间
+        pricing_resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: 完成定价时间
+        pricing_snapshot:
+          readOnly: true
+        starts_on:
+          type: string
+          format: date
+          nullable: true
+          title: 开始日期
+        ends_on:
+          type: string
+          format: date
+          nullable: true
+          title: 结束日期
+        due_at:
+          type: string
+          format: date-time
+          nullable: true
+          title: 截止时间
+        status:
+          $ref: '#/components/schemas/StatusCa7Enum'
+        tags:
+          title: 标签
+        ai_metadata:
+          title: AI 元数据
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        progress:
+          type: integer
+          minimum: 0
+          writeOnly: true
+          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+        occurrence_date:
+          type: string
+          format: date
+          writeOnly: true
+          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
+      required:
+      - created_at
+      - id
+      - pricing_requested_at
+      - pricing_resolved_at
+      - pricing_snapshot
+      - pricing_status
+      - task_type
+      - title
+      - updated_at
     TokenRefresh:
       type: object
       properties:
