@@ -5,15 +5,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.model.DailyMetric
 import com.example.motiwish.data.model.OneShotTask
-import com.example.motiwish.data.model.PeriodicTask
 import com.example.motiwish.data.network.PricingSession
 import com.example.motiwish.data.network.TaskOccurrence
 import com.example.motiwish.data.network.TaskPayload
 import com.example.motiwish.data.model.*
+import com.example.motiwish.data.network.CreatePricingSessionRequest
+import com.example.motiwish.data.network.FeedbackRequest
 import com.example.motiwish.data.network.TaskApi // 新增
-import com.example.motiwish.data.network.TaskCompleteRequest // 新增
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.TaskRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -53,6 +54,19 @@ class TaskViewModel(
 
     private val _pricingError = MutableSharedFlow<String>()
     val pricingError: SharedFlow<String> = _pricingError.asSharedFlow()
+
+    // 定价任务草稿管理
+    private val _taskDrafts = MutableStateFlow<List<TaskDraft>>(emptyList())
+    val taskDrafts: StateFlow<List<TaskDraft>> = _taskDrafts
+
+    // 新增：当前选中的待定价草稿
+    private val _selectedDraftForPricing = MutableStateFlow<Pair<Int, PricingSession>?>(null)
+    val selectedDraftForPricing: StateFlow<Pair<Int, PricingSession>?> = _selectedDraftForPricing
+
+    // 生成定价草稿临时 ID
+    private var nextDraftId = 1
+
+    private var pollingJob: Job? = null
 
     init {
         loadTodayMetric()
@@ -101,7 +115,8 @@ class TaskViewModel(
                 } catch (e: Exception) {
                     LocalDateTime.now().plusDays(7)
                 },
-                progress = occ.task.progress_target ?: 0,
+                progressTarget = occ.task.progress_target ?: 0,
+                progress = occ.progress ?: 0,
                 status = when (occ.status) {
                     "completed" -> "COMPLETED"
                     "missed", "cancelled" -> "FAILED"
@@ -224,27 +239,6 @@ class TaskViewModel(
         }
     }
 
-    // 添加周期任务（调用云端 API）
-    fun addPeriodicTask(name: String, type: String, dayValue: Int, reward: Int) {
-        viewModelScope.launch {
-            try {
-                // 临时构造一个 PeriodicTask 对象用于传递参数，Repository 内部会转为云端请求
-                val task = PeriodicTask(
-                    name = name,
-                    type = type,
-                    dayOfWeek = if (type == "WEEKLY") dayValue else null,
-                    dayOfMonth = if (type == "MONTHLY") dayValue else null,
-                    rewardAmount = reward
-                )
-                taskRepository.addPeriodicTask(task)
-                _uiMessage.emit("周期任务添加成功")
-                loadTodayOccurrences()   // 刷新列表
-            } catch (e: Exception) {
-                _uiMessage.emit("添加失败: ${e.message}")
-            }
-        }
-    }
-
     // 删除周期任务（根据 TodayPeriodicTask）
     fun deletePeriodicTask(task: TodayPeriodicTask) {
         viewModelScope.launch {
@@ -258,21 +252,40 @@ class TaskViewModel(
         }
     }
 
-    // 开启定价对话
-    fun startTaskPricing(
-        taskType: String, // "recurring" or "one_time"
+    // 异步开启定价对话
+    fun createTaskDraftAsync(
+        taskType: String,
         title: String,
         description: String? = null,
-        recurrence: String? = null,       // for recurring
-        weekdays: List<Int>? = null,      // for recurring weekly
-        monthDays: List<Int>? = null,     // for recurring monthly
-        dueAt: LocalDateTime? = null,     // for one_time
+        recurrence: String? = null,
+        weekdays: List<Int>? = null,
+        monthDays: List<Int>? = null,
+        dueAt: LocalDateTime? = null,
         settlementTrack: String = "regular",
         estimatedFocusMinutes: Int? = null
     ) {
-        Log.d("TaskViewModel", "startTaskPricing called")
+        val draftId = nextDraftId++
+        // 立即添加本地草稿，状态为 "pricing"
+        val draft = TaskDraft(
+            id = draftId,
+            sessionId = null,
+            title = title,
+            description = description,
+            taskType = taskType,
+            recurrence = recurrence,
+            weekdays = weekdays,
+            monthDays = monthDays,
+            dueAt = dueAt,
+            settlementTrack = settlementTrack,
+            estimatedFocusMinutes = estimatedFocusMinutes,
+            status = "pricing",
+            quotePayload = null,
+            createdAt = System.currentTimeMillis()
+        )
+        _taskDrafts.value = _taskDrafts.value + draft
+
+        // 异步执行网络请求（不阻塞 UI）
         viewModelScope.launch {
-            _isPricingLoading.value = true
             try {
                 val payload = TaskPayload(
                     title = title,
@@ -286,84 +299,148 @@ class TaskViewModel(
                     month_days = monthDays,
                     due_at = dueAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ISO_INSTANT),
                     progress_target = when {
-                        taskType == "one_time" && settlementTrack == "exploration" -> 1   // 探索任务初始专注0分钟
-                        else -> 100   // 普通一次性任务进度目标100%
+                        taskType == "one_time" && settlementTrack == "exploration" -> estimatedFocusMinutes ?: 1
+                        taskType == "one_time" -> 100
+                        else -> null
                     },
                     tags = listOf("user_created")
                 )
-                val session = taskRepository.createPricingSession(payload)
-                _pricingSession.value = session
+                val response = taskApi.createPricingSession(CreatePricingSessionRequest(payload))
+                if (response.success) {
+                    val session = response.data
+                    // 更新草稿：填入 sessionId 和 quotePayload，状态改为 "quoted"
+                    _taskDrafts.value = _taskDrafts.value.map {
+                        if (it.id == draftId) {
+                            it.copy(
+                                sessionId = session.id,
+                                status = "quoted",
+                                quotePayload = session.quote_payload
+                            )
+                        } else it
+                    }
+                    _uiMessage.emit("任务定价完成")
+                } else {
+                    // 定价失败，移除草稿
+                    _taskDrafts.value = _taskDrafts.value.filter { it.id != draftId }
+                    _uiMessage.emit("定价失败: ${response.message}")
+                }
             } catch (e: Exception) {
-                _pricingError.emit("创建定价会话失败: ${e.message}")
-            } finally {
-                _isPricingLoading.value = false
+                _taskDrafts.value = _taskDrafts.value.filter { it.id != draftId }
+                _uiMessage.emit("网络错误: ${e.message}")
             }
+        }
+    }
+
+    // 展示定价对话框（仅当任务状态为 quoted）
+    fun showPricingDialog(draftId: Int) {
+        Log.d("PricingDialog", "showPricingDialog called with draftId=$draftId")
+        val draft = _taskDrafts.value.find { it.id == draftId }
+        Log.d("PricingDialog", "Found draft: $draft")
+        if (draft?.status == "quoted" && draft.quotePayload != null && draft.sessionId != null) {
+            Log.d("PricingDialog", "Conditions met, building tempSession")
+            // 构建临时 TaskPayload，仅用于填充数据类
+            val tempTaskPayload = TaskPayload(
+                title = draft.title,
+                description = draft.description,
+                task_type = draft.taskType,
+                recurrence = draft.recurrence,
+                settlement_track = draft.settlementTrack,
+                difficulty_level = "medium",
+                estimated_focus_minutes = draft.estimatedFocusMinutes,
+                weekdays = draft.weekdays,
+                month_days = draft.monthDays,
+                due_at = draft.dueAt?.atZone(ZoneId.systemDefault())?.format(DateTimeFormatter.ISO_INSTANT),
+                progress_target = when {
+                    draft.taskType == "one_time" && draft.settlementTrack == "exploration" -> draft.estimatedFocusMinutes ?: 1
+                    draft.taskType == "one_time" -> 100
+                    else -> null
+                },
+                tags = listOf("user_created")
+            )
+            val tempSession = PricingSession(
+                id = draft.sessionId,
+                status = "waiting_feedback",
+                task_payload = tempTaskPayload,
+                quote_payload = draft.quotePayload,
+                feedback_history = null,
+                created_task = null
+            )
+            _selectedDraftForPricing.value = Pair(draftId, tempSession)
+        } else {
+            Log.w("PricingDialog", "Conditions not met: status=${draft?.status}, quotePayload=${draft?.quotePayload}, sessionId=${draft?.sessionId}")
         }
     }
 
     // 清除定价对话
     fun dismissPricingDialog() {
-        _pricingSession.value = null
+        _selectedDraftForPricing.value = null
     }
 
-    // 处理定价反馈：接收定价
-    fun acceptPricing(sessionId: Int) {
+    // 接受定价并创建正式任务
+    fun acceptPricingAndCreate(draftId: Int) {
         viewModelScope.launch {
-            _isPricingLoading.value = true
+            val draft = _taskDrafts.value.find { it.id == draftId }
+            if (draft == null || draft.sessionId == null) {
+                _uiMessage.emit("草稿不存在，请重试")
+                dismissPricingDialog()
+                return@launch
+            }
+            // 关闭对话框（可选立即关闭）
+            dismissPricingDialog()
             try {
-                val updatedSession = taskRepository.submitFeedback(sessionId, "accept")
+                val updatedSession = taskRepository.submitFeedback(draft.sessionId, "accept")
                 if (updatedSession.created_task != null) {
+                    _taskDrafts.value = _taskDrafts.value.filter { it.id != draftId }
                     loadTodayOccurrences()
-                    _uiMessage.emit("任务添加成功")   // 统一消息
-                    _pricingSession.value = null    // 清除对话页面
+                    _uiMessage.emit("任务创建成功")
                 } else {
-                    _pricingError.emit("任务创建失败")
+                    _uiMessage.emit("任务创建失败")
                 }
             } catch (e: Exception) {
-                _pricingError.emit("接受定价失败: ${e.message}")
+                _uiMessage.emit("接受定价失败: ${e.message}")
             } finally {
-                _isPricingLoading.value = false
+                // 确保对话框已关闭（如果上面没有调用）
+                dismissPricingDialog()
             }
         }
     }
 
-    // 处理定价反馈：拒绝定价
-    fun revisePricing(sessionId: Int, direction: String, feedbackText: String) {
-        viewModelScope.launch {
-            _isPricingLoading.value = true
-            try {
-                val updatedSession = taskRepository.submitFeedback(sessionId, "revise", direction, feedbackText)
-                _pricingSession.value = updatedSession  // 更新报价信息
-            } catch (e: Exception) {
-                _pricingError.emit("反馈失败: ${e.message}")
-            } finally {
-                _isPricingLoading.value = false
-            }
-        }
-    }
+    // 用户反馈：拒绝定价（异步）
+    fun revisePricing(draftId: Int, direction: String, feedbackText: String) {
+        // 1. 立即关闭对话框
+        dismissPricingDialog()
 
-    // 添加一次性任务
-    fun addOneShotTask(
-        name: String,
-        description: String,
-        deadline: LocalDateTime,
-        settlementTrack: String = "regular",
-        estimatedFocusMinutes: Int? = null
-    ) {
+        // 2. 找到对应的草稿
+        val draft = _taskDrafts.value.find { it.id == draftId }
+        if (draft == null) {
+            return
+        }
+
+        // 3. 立即更新状态为 "repricing"
+        _taskDrafts.value = _taskDrafts.value.map {
+            if (it.id == draftId) it.copy(status = "repricing") else it
+        }
+
+        // 4. 异步提交反馈（不阻塞 UI）
         viewModelScope.launch {
             try {
-                val task = OneShotTask(
-                    name = name,
-                    description = description,
-                    deadline = deadline,
-                    settlementTrack = settlementTrack,
-                    estimatedFocusMinutes = estimatedFocusMinutes
-                )
-                taskRepository.addOneShotTask(task)
-                _uiMessage.emit("一次性任务添加成功")
-                loadTodayOccurrences()
+                val updatedSession = taskRepository.submitFeedback(draft.sessionId!!, "revise", direction, feedbackText)
+                // 5. 成功后更新草稿状态为 "quoted" 并保存新报价
+                _taskDrafts.value = _taskDrafts.value.map {
+                    if (it.id == draftId) {
+                        it.copy(
+                            status = "quoted",
+                            quotePayload = updatedSession.quote_payload
+                        )
+                    } else it
+                }
+                _uiMessage.emit("重新定价完成，请点击查看")
             } catch (e: Exception) {
-                _uiMessage.emit("添加失败: ${e.message}")
+                // 失败时回滚到 quoted 状态（保留原报价）或标记为 failed
+                _taskDrafts.value = _taskDrafts.value.map {
+                    if (it.id == draftId) it.copy(status = "quoted") else it
+                }
+                _uiMessage.emit("重新定价失败: ${e.message}")
             }
         }
     }
@@ -423,7 +500,7 @@ class TaskViewModel(
     fun syncTasksFromRemote() {
         viewModelScope.launch {
             try {
-                taskRepository.syncAllTasks()
+                //taskRepository.syncAllTasks()
                 loadTodayMetric()
                 loadTodayOccurrences()
             } catch (e: Exception) {
@@ -434,10 +511,16 @@ class TaskViewModel(
 
     fun refreshFromNetwork() {
         viewModelScope.launch {
-            taskRepository.syncAllTasks()
+            //taskRepository.syncAllTasks()
             loadTodayOccurrences()
             _uiMessage.emit("数据已同步")
         }
+    }
+
+    // 自动结束轮询
+    override fun onCleared() {
+        super.onCleared()
+        pollingJob?.cancel()
     }
 }
 

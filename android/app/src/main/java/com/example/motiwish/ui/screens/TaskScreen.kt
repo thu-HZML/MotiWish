@@ -41,6 +41,7 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
     val todayMetric by viewModel.todayMetric.collectAsState()
     val todaysPeriodicTasks by viewModel.todaysPeriodicTasks.collectAsState()
     val oneShotTasks by viewModel.oneShotTasks.collectAsState()
+    val taskDrafts by viewModel.taskDrafts.collectAsState()     // 定价中的任务（还未创建）
 
     // 排序：未完成的排前面
     val sortedPeriodicTasks = todaysPeriodicTasks.sortedBy { it.completed }
@@ -184,6 +185,77 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text("评估今日日常")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---------- 定价中任务卡片 ----------
+            if (taskDrafts.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "定价中的任务",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            taskDrafts.forEach { draft ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = draft.title,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    when (draft.status) {
+                                        "pricing" -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("AI 定价中...", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                        "quoted" -> {
+                                            Button(
+                                                onClick = { viewModel.showPricingDialog(draft.id) },
+                                                modifier = Modifier.wrapContentWidth()
+                                            ) {
+                                                Text("已定价，点击查看")
+                                            }
+                                        }
+                                        "repricing" -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("AI 重新定价中...", style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+                                        else -> {
+                                            // 可处理其他状态（如 repricing）
+                                            Text(draft.status, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                                if (draft != taskDrafts.last()) {
+                                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                                }
                             }
                         }
                     }
@@ -433,6 +505,17 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                 }
             }
         }
+
+        // 显示定价对话
+        val pricingDialogState by viewModel.selectedDraftForPricing.collectAsState()
+        pricingDialogState?.let { (draftId, session) ->
+            PricingDialog(
+                session = session,
+                onAccept = { viewModel.acceptPricingAndCreate(draftId) },
+                onRevise = { direction, text -> viewModel.revisePricing(draftId, direction, text) },
+                onDismiss = { viewModel.dismissPricingDialog() }
+            )
+        }
     }
 }
 
@@ -484,7 +567,7 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
     if (pricingSession != null) {
         PricingDialog(
             session = pricingSession!!,
-            onAccept = { viewModel.acceptPricing(pricingSession!!.id) },
+            onAccept = { viewModel.acceptPricingAndCreate(pricingSession!!.id) },
             onRevise = { direction, text -> viewModel.revisePricing(pricingSession!!.id, direction, text) },
             onDismiss = { viewModel.dismissPricingDialog() }
         )
@@ -606,21 +689,20 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
                             scope.launch { snackbarHostState.showSnackbar("请选择有效的截止日期和时间") }
                             return@Button
                         }
-                        if (isExploration) {
-                            val minutes = estimatedMinutes.toIntOrNull()
-                            if (minutes == null || minutes <= 0) {
-                                scope.launch { snackbarHostState.showSnackbar("请填写有效的专注时长") }
-                                return@Button
-                            }
+                        val estimated = if (isExploration) estimatedMinutes.toIntOrNull() else null
+                        if (isExploration && (estimated == null || estimated <= 0)) {
+                            scope.launch { snackbarHostState.showSnackbar("请填写有效的专注时长") }
+                            return@Button
                         }
-                        viewModel.startTaskPricing(
+                        viewModel.createTaskDraftAsync(
                             taskType = "one_time",
                             title = taskName,
                             description = description,
                             dueAt = deadline,
                             settlementTrack = if (isExploration) "exploration" else "regular",
-                            estimatedFocusMinutes = if (isExploration) estimatedMinutes.toIntOrNull() else null
+                            estimatedFocusMinutes = estimated   // 仅探索任务传入
                         )
+                        navController.popBackStack()     // 立即返回主页
                     } else {
                         // 周期任务
                         val recurrence = when (taskType) {
@@ -631,7 +713,7 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
                         }
                         val weekdays = if (taskType == "WEEKLY") listOf(dayValue - 1) else null
                         val monthDays = if (taskType == "MONTHLY") listOf(dayValue) else null
-                        viewModel.startTaskPricing(
+                        viewModel.createTaskDraftAsync(
                             taskType = "recurring",
                             title = taskName,
                             description = description,
@@ -639,6 +721,7 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
                             weekdays = weekdays,
                             monthDays = monthDays
                         )
+                        navController.popBackStack()     // 立即返回主页
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -646,7 +729,7 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
                 if (isPricingLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 } else {
-                    Text("获取 AI 定价")
+                    Text("创建任务")
                 }
             }
         }
@@ -693,7 +776,9 @@ fun PricingDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row {
-                        Button(onClick = { onRevise(selectedDirection, feedbackText) }) {
+                        Button(onClick = {
+                            onRevise(selectedDirection, feedbackText)  // 这个 onRevise 应调用 revisePricing
+                        }) {
                             Text("调整定价")
                         }
                         Button(onClick = onAccept) {

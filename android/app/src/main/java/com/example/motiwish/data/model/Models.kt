@@ -47,6 +47,7 @@ data class OneShotTask(
     val name: String,
     val description: String,
     val deadline: LocalDateTime,
+    var progressTarget: Int = 0,                    // 用于普通任务的进度目标，探索任务复用为预计专注分钟数
     var progress: Int = 0,                          // 用于普通任务的进度百分比，探索任务复用为已专注分钟数
     var status: String = "ACTIVE",
     var reward: Int = 0,

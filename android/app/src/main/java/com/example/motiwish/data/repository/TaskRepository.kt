@@ -5,6 +5,7 @@ import android.util.Log
 import com.example.motiwish.data.database.TaskDao
 import com.example.motiwish.data.model.*
 import com.example.motiwish.data.network.*
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import java.time.LocalDate
@@ -15,113 +16,33 @@ class TaskRepository(
     private val taskDao: TaskDao,
     private val taskApi: TaskApi          // 新增网络 API
 ) {
+    /**
+     * 从云端获取所有活跃任务（包括周期和一次性）
+     */
+    suspend fun fetchAllActiveTasksFromCloud(): List<RemoteTask> {
+        var page = 1
+        val allTasks = mutableListOf<RemoteTask>()
+        while (true) {
+            val response = taskApi.getTasks(page)
 
-    // ---------- 同步：从云端拉取所有任务，更新本地数据库 ----------
-    suspend fun syncAllTasks() {
-        try {
-            var currentPage = 1
-            var hasMore = true
-            val allRemoteTasks = mutableListOf<RemoteTask>()
-
-            while (hasMore) {
-                val response = taskApi.getTasks(currentPage)
-                Log.d("TaskRepository", "Page $currentPage response: success=, results size=${response.results?.size}")
-                val items = response.results ?: emptyList()
-                if (items.isNotEmpty()) {
-                    val tasks = items.flatMap { it.data }
-                    allRemoteTasks.addAll(tasks)
-                    Log.d("TaskRepository", "Added ${tasks.size} tasks, total now ${allRemoteTasks.size}")
-                }
-                hasMore = response.next != null
-                currentPage++
+            // 检查顶层 success
+            if (!response.success) {
+                break
             }
 
-            Log.d("TaskRepository", "Fetched ${allRemoteTasks.size} remote tasks")
-            convertAndSaveRemoteTasks(allRemoteTasks)
-        } catch (e: Exception) {
-            Log.e("TaskRepository", "syncAllTasks error", e)
-        }
-    }
-
-    // 将云端任务转换为本地实体
-    private suspend fun convertAndSaveRemoteTasks(remoteTasks: List<RemoteTask>) {
-        for (remote in remoteTasks) {
-            when (remote.task_type) {
-                "daily", "weekly", "monthly" -> {
-                    val type = remote.task_type.uppercase()
-                    val dayOfWeek = if (type == "WEEKLY" && !remote.weekdays.isNullOrEmpty()) {
-                        // 假设后端 weekdays 中 1=周一，与 LocalDate 的 dayOfWeek.value (1=周一) 一致
-                        remote.weekdays[0]
-                    } else null
-                    val dayOfMonth = if (type == "MONTHLY" && !remote.month_days.isNullOrEmpty()) {
-                        remote.month_days[0]
-                    } else null
-
-                    val periodic = PeriodicTask(
-                        id = remote.id,
-                        name = remote.title,
-                        type = type,
-                        dayOfWeek = dayOfWeek,
-                        dayOfMonth = dayOfMonth,
-                        rewardAmount = remote.reward_primary,
-                        active = remote.status == "active"
-                    )
-                    taskDao.insertPeriodicTask(periodic)
-                }
-                "one_time" -> {
-                    val deadline = remote.due_at?.let {
-                        LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME)
-                    } ?: LocalDateTime.now().plusDays(7)
-
-                    val status = when (remote.status) {
-                        "active" -> "ACTIVE"
-                        "completed" -> "COMPLETED"
-                        "failed" -> "FAILED"
-                        else -> "ACTIVE"
-                    }
-
-                    val oneShot = OneShotTask(
-                        id = remote.id,
-                        name = remote.title,
-                        description = remote.description ?: "",
-                        deadline = deadline,
-                        progress = remote.progress_target ?: 0,
-                        status = status,
-                        reward = if (status == "COMPLETED") remote.reward_primary else 0,
-                        penalty = if (status == "FAILED") remote.penalty_primary else 0,
-                        evaluated = status != "ACTIVE"
-                    )
-                    taskDao.insertOneShotTask(oneShot)
-                }
-                "metric" -> {
-                    // 处理日常指标任务（起床时间、喝水等）
-                    if (remote.metric_key != null) {
-                        updateDailyMetricFromRemote(remote)
-                    }
-                }
-                // 其他类型忽略
+            val data = response.data
+            val results = data.results
+            if (results.isEmpty()) {
+                break
             }
-        }
-    }
 
-    private suspend fun updateDailyMetricFromRemote(remote: RemoteTask) {
-        val today = LocalDate.now()
-        var metric = taskDao.getDailyMetricByDate(today)
-        if (metric == null) {
-            metric = DailyMetric(date = today)
+            // 直接添加，无需再解包
+            allTasks.addAll(results.filter { it.status == "active" })
+
+            if (data.next == null) break
+            page++
         }
-        when (remote.metric_key) {
-            "wake_up_time" -> metric.wakeUpTime = remote.target_value?.toString() ?: ""
-            "sleep_time" -> metric.sleepTime = remote.target_value?.toString() ?: ""
-            "phone_usage_minutes" -> metric.phoneUsageMinutes = remote.target_value ?: 0
-            "water_cups" -> metric.waterCups = remote.target_value ?: 0
-        }
-        if (remote.status == "completed") {
-            metric.evaluated = true
-            metric.reward = remote.reward_primary
-        }
-        if (metric.id == 0) taskDao.insertDailyMetric(metric)
-        else taskDao.updateDailyMetric(metric)
+        return allTasks
     }
 
     // ---------- 日常指标 ----------
@@ -135,8 +56,6 @@ class TaskRepository(
         if (metric.id == 0) taskDao.insertDailyMetric(metric)
         else taskDao.updateDailyMetric(metric)
     }
-
-    fun getAllDailyMetrics(): Flow<List<DailyMetric>> = taskDao.getAllDailyMetrics()
 
     // 评估日常指标（调用 API）
     suspend fun evaluateDailyMetric(metric: DailyMetric): Int {
@@ -158,62 +77,6 @@ class TaskRepository(
     }
 
     // ---------- 周期任务 ----------
-    fun getAllActivePeriodicTasks(): Flow<List<PeriodicTask>> = taskDao.getAllActivePeriodicTasks()
-
-    suspend fun addPeriodicTask(task: PeriodicTask): PeriodicTask {
-        // 映射周期任务的 task_type 和 recurrence
-        val taskType = "recurring"
-        val recurrence = when (task.type) {
-            "DAILY" -> "daily"
-            "WEEKLY" -> "weekly"
-            "MONTHLY" -> "monthly"
-            else -> "none"
-        }
-        val weekdays = if (task.type == "WEEKLY" && task.dayOfWeek != null) {
-            // 后端 weekdays 使用 0=周一，需要将 dayOfWeek（1=周一）转换
-            listOf(task.dayOfWeek - 1)
-        } else null
-        val monthDays = if (task.type == "MONTHLY" && task.dayOfMonth != null) {
-            listOf(task.dayOfMonth)
-        } else null
-
-        val request = CreateTaskRequest(
-            title = task.name,
-            description = null,
-            task_type = taskType,
-            recurrence = recurrence,
-            settlement_track = "regular",   // 默认常规轨道
-            difficulty_level = "medium",    // 可配置
-            estimated_focus_minutes = null,
-            weekdays = weekdays,
-            month_days = monthDays,
-            metric_key = null,
-            target_value = null,
-            progress_target = null,
-            reward_primary = null,
-            penalty_primary = null,
-            starts_on = null,
-            ends_on = null,
-            due_at = null,
-            status = "active",
-            tags = null,
-            ai_metadata = null
-        )
-
-        val response = taskApi.createTask(request)
-        if (response.success) {
-            val remoteTask = response.data
-            val newTask = task.copy(
-                id = remoteTask.id,
-                rewardAmount = remoteTask.reward_primary
-            )
-            taskDao.insertPeriodicTask(newTask)
-            return newTask
-        } else {
-            throw Exception(response.message)
-        }
-    }
-
     suspend fun deletePeriodicTask(task: PeriodicTask) {
         try {
             val response = taskApi.deleteTask(task.id)
@@ -237,47 +100,6 @@ class TaskRepository(
     suspend fun getPeriodicTaskById(id: Int): PeriodicTask? = taskDao.getPeriodicTaskById(id)
 
     // ---------- 一次性任务 ----------
-    fun getAllOneShotTasks(): Flow<List<OneShotTask>> = taskDao.getAllOneShotTasks()
-
-    suspend fun addOneShotTask(task: OneShotTask): OneShotTask {
-        val request = CreateTaskRequest(
-            title = task.name,
-            description = task.description,
-            task_type = "one_time",
-            recurrence = null,
-            settlement_track = task.settlementTrack,
-            difficulty_level = "medium",
-            estimated_focus_minutes = task.estimatedFocusMinutes,
-            weekdays = null,
-            month_days = null,
-            metric_key = null,
-            target_value = null,
-            progress_target = task.progress,   // 当前进度（通常为0）
-            reward_primary = null,                // 让后端定价，或设置默认值
-            penalty_primary = null,
-            starts_on = null,
-            ends_on = null,
-            due_at = task.deadline.toString(), // 需要格式化为 ISO 8601，如 "2026-05-30T23:59:59Z"
-            status = "active",
-            tags = null,
-            ai_metadata = null
-        )
-
-        val response = taskApi.createTask(request)
-        if (response.success) {
-            val remoteTask = response.data
-            val newTask = task.copy(
-                id = remoteTask.id,
-                reward = remoteTask.reward_primary,
-                penalty = remoteTask.penalty_primary
-            )
-            taskDao.insertOneShotTask(newTask)
-            return newTask
-        } else {
-            throw Exception(response.message)
-        }
-    }
-
     suspend fun updateOneShotTask(task: OneShotTask) {
         // 本地更新不需要立即同步，进度更新有专门的 API
         taskDao.updateOneShotTask(task)
@@ -287,7 +109,7 @@ class TaskRepository(
     suspend fun updateExplorationProgress(taskId: Int, focusedMinutes: Int): Boolean {
         return try {
             // 假设后端接受 PATCH /api/v1/tasks/tasks/{id}/ 更新 progress 字段
-            val request = PartialUpdateTaskRequest(progress_target = focusedMinutes)
+            val request = PartialUpdateTaskRequest(progress = focusedMinutes)
             taskApi.partialUpdateTask(taskId, request)
             true
         } catch (e: Exception) {
@@ -313,8 +135,8 @@ class TaskRepository(
     // 更新一次性任务进度（调用 API）
     suspend fun updateOneShotProgress(taskId: Int, progress: Int): Boolean {
         return try {
-            val request = PartialUpdateTaskRequest(progress_target = progress)
-            val updatedTask = taskApi.partialUpdateTask(taskId, request)
+            val request = PartialUpdateTaskRequest(progress = progress)
+            taskApi.partialUpdateTask(taskId, request)
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -326,7 +148,7 @@ class TaskRepository(
         return try {
             taskApi.evaluateOneShotTask(taskId)
             // 评估后重新从云端拉取该任务的最新状态并更新本地
-            syncAllTasks()   // 简单粗暴：全量同步。也可以单独拉取一个任务，但为了简便先这样
+            //syncAllTasks()   // 简单粗暴：全量同步。也可以单独拉取一个任务，但为了简便先这样
             true
         } catch (e: Exception) {
             false
@@ -353,6 +175,7 @@ class TaskRepository(
         return try {
             val dateStr = date?.toString()
             val response = taskApi.getTodayTasks(dateStr)
+
             if (response.success) {
                 response.data
             } else {

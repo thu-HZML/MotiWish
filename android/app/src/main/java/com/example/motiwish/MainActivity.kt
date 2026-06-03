@@ -50,7 +50,9 @@ import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
-import com.example.motiwish.BuildConfig
+
+// 日志拦截器
+//import okhttp3.logging.HttpLoggingInterceptor
 
 class MainActivity : ComponentActivity() {
 
@@ -103,6 +105,11 @@ class MainActivity : ComponentActivity() {
             .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()*/
+
+        // 日志拦截器
+        //val loggingInterceptor = HttpLoggingInterceptor().apply {
+        //    level = HttpLoggingInterceptor.Level.BODY   // 打印完整的请求/响应体
+        //}
 
         // 忽略证书验证
         val authInterceptor = AuthInterceptor()
