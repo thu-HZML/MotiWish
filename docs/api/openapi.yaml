@@ -675,7 +675,7 @@ paths:
   /api/v1/shop/items/:
     get:
       operationId: shop_items_list
-      description: 返回当前用户的商店商品，支持养成材料、功能轻道具和愿望奖励。
+      description: 返回当前用户可见的商店商品，包括公共商品和用户自建愿望商品。
       summary: 获取商店商品列表
       parameters:
       - name: page
@@ -695,10 +695,129 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedShopItemListResponseList'
           description: ''
+    post:
+      operationId: shop_items_create
+      description: 用户自定义愿望商品，例如旅游奖励、外食奖励等。自建商品只属于当前用户，并只会出现在自己的商品列表中。
+      summary: 创建自建愿望商品
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+            examples:
+              创建旅游奖励:
+                value:
+                  title: Travel reward
+                  description: A self-defined trip reward.
+                  price_tier: large
+                  price_secondary: 800
+                  rarity: epic
+                  inventory: 1
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomWishItemCreateResponse'
+          description: ''
+  /api/v1/shop/items/{id}/:
+    put:
+      operationId: shop_items_update
+      summary: 更新自建愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 商店商品.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomWishItem'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomWishItem'
+          description: ''
+    patch:
+      operationId: shop_items_partial_update
+      summary: 部分更新自建愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 商店商品.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomWishItem'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomWishItem'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomWishItem'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomWishItem'
+          description: ''
+    delete:
+      operationId: shop_items_destroy
+      summary: 删除自建愿望商品
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 商店商品.
+        required: true
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/shop/items/{id}/redeem/:
     post:
       operationId: shop_items_redeem_create
-      description: 消耗二级货币购买商品。经验材料会直接增加用户经验；功能轻道具会进入库存；愿望奖励会生成待处理记录。
+      description: 消耗二级货币购买商品。愿望商品会生成待处理的兑换记录。
       summary: 购买商店商品
       parameters:
       - in: path
@@ -1955,6 +2074,84 @@ components:
       description: |-
         * `primary` - 一级货币
         * `secondary` - 二级货币
+    CustomWishItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 商品名称
+          maxLength: 120
+        description:
+          type: string
+          title: 商品描述
+        category:
+          allOf:
+          - $ref: '#/components/schemas/CategoryEnum'
+          readOnly: true
+          title: 商品分类
+        rarity:
+          allOf:
+          - $ref: '#/components/schemas/RarityEnum'
+          title: 稀有度
+        price_tier:
+          allOf:
+          - $ref: '#/components/schemas/PriceTierEnum'
+          title: 价格档位
+        price_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 二级货币定价
+        inventory:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          title: 库存
+        is_enabled:
+          type: boolean
+          readOnly: true
+          title: 是否上架
+        auto_refund_on_reject:
+          type: boolean
+          title: 拒绝时自动退款
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - category
+      - created_at
+      - id
+      - is_enabled
+      - price_secondary
+      - title
+      - updated_at
+    CustomWishItemCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/CustomWishItem'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     DashboardReportPayload:
       type: object
       properties:
@@ -3054,6 +3251,60 @@ components:
           items:
             $ref: '#/components/schemas/FocusAreasEnum'
           description: 当前主要关注领域，多选；如果跳过，请传 ["unspecified"]。
+    PatchedCustomWishItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          title: 商品名称
+          maxLength: 120
+        description:
+          type: string
+          title: 商品描述
+        category:
+          allOf:
+          - $ref: '#/components/schemas/CategoryEnum'
+          readOnly: true
+          title: 商品分类
+        rarity:
+          allOf:
+          - $ref: '#/components/schemas/RarityEnum'
+          title: 稀有度
+        price_tier:
+          allOf:
+          - $ref: '#/components/schemas/PriceTierEnum'
+          title: 价格档位
+        price_secondary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 二级货币定价
+        inventory:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+          title: 库存
+        is_enabled:
+          type: boolean
+          readOnly: true
+          title: 是否上架
+        auto_refund_on_reject:
+          type: boolean
+          title: 拒绝时自动退款
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
     PatchedDynamicProfile:
       type: object
       properties:

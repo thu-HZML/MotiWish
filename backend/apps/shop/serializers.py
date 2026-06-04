@@ -37,6 +37,49 @@ class WishItemSerializer(serializers.ModelSerializer):
         return attrs
 
 
+
+
+class CustomWishItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WishItem
+        fields = (
+            "id",
+            "title",
+            "description",
+            "category",
+            "rarity",
+            "price_tier",
+            "price_secondary",
+            "inventory",
+            "is_enabled",
+            "auto_refund_on_reject",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "category", "is_enabled", "created_at", "updated_at")
+
+    def validate_price_secondary(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("price_secondary must be greater than 0.")
+        return value
+
+    def validate_inventory(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("inventory must be null or greater than 0.")
+        return value
+
+    def validate(self, attrs):
+        price_tier = attrs.get("price_tier", getattr(self.instance, "price_tier", WishPriceTier.MEDIUM))
+        price_secondary = attrs.get("price_secondary", getattr(self.instance, "price_secondary", None))
+        if price_secondary is not None:
+            bounds = PRICE_BOUNDS[price_tier]
+            if price_secondary < bounds["min"] or price_secondary > bounds["max"]:
+                raise serializers.ValidationError(
+                    {"price_secondary": f"{price_tier} price must be between {bounds['min']} and {bounds['max']}."}
+                )
+        return attrs
+
+
 class ShopMetaSerializer(serializers.Serializer):
     categories = serializers.JSONField()
     rarities = serializers.JSONField()
