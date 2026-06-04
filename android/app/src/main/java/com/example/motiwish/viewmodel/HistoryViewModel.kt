@@ -19,8 +19,11 @@ data class HistoryItem(
     val date: String,
     val status: String,
     val reward: Int,
+    val penalty: Int,
     val type: String,
-    val isDeadline: Boolean = false
+    val isDeadline: Boolean = false,
+    val actualReward: Int? = null,   // 新增：实际获得货币
+    val actualPenalty: Int? = null    // 新增：实际扣除货币
 )
 
 class HistoryViewModel(
@@ -84,6 +87,8 @@ class HistoryViewModel(
                     val status = occurrence?.status ?: "pending"
                     val isCompleted = status == "completed"
                     val isDeadline = currentDate == dueDate
+                    val actualReward = occurrence?.settlement_details?.reward_primary   // 实际获得奖励
+                    val actualPenalty = occurrence?.settlement_details?.penalty_primary // 实际获得惩罚
                     items.add(
                         HistoryItem(
                             title = task.title,
@@ -96,8 +101,11 @@ class HistoryViewModel(
                                 else -> status
                             },
                             reward = if (isCompleted) task.reward_primary else 0,
+                            penalty = if (!isCompleted) task.penalty_primary else 0,
                             type = "一次性",
-                            isDeadline = isDeadline
+                            isDeadline = isDeadline,
+                            actualReward = actualReward,
+                            actualPenalty = actualPenalty
                         )
                     )
                     currentDate = currentDate.plusDays(1)
@@ -124,6 +132,7 @@ class HistoryViewModel(
                                     else -> status
                                 },
                                 reward = if (isCompleted) task.reward_primary else 0,
+                                penalty = if (!isCompleted) task.penalty_primary else 0,
                                 type = "周期",
                                 isDeadline = false
                             )

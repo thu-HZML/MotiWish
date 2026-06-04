@@ -186,7 +186,13 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                                     ) {
                                         Text("类型: ${task.type}", style = MaterialTheme.typography.bodySmall)
                                         Text("状态: ${task.status}", style = MaterialTheme.typography.bodySmall)
-                                        Text("货币: ${task.reward}", style = MaterialTheme.typography.bodySmall)
+                                        Text(
+                                            "货币: ${if (task.actualReward != null && task.actualPenalty != null)
+                                                "+${task.actualReward} / -${task.actualPenalty}"
+                                            else
+                                                "+${task.reward} / -${task.penalty}"}",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
                                     }
                                 }
                             }

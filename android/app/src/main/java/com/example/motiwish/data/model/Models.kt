@@ -55,7 +55,9 @@ data class OneShotTask(
     var evaluated: Boolean = false,
     val createdDate: LocalDate = LocalDate.now(),   // 新增字段，默认值为今天
     var settlementTrack: String = "regular",        // 是否为探索任务
-    var estimatedFocusMinutes: Int? = null          // 预估探索时长
+    var estimatedFocusMinutes: Int? = null,          // 预估探索时长
+    val actualReward: Int? = null,   // 实际获得奖励
+    val actualPenalty: Int? = null   // 实际扣除惩罚
 )
 
 @Entity(tableName = "transactions")

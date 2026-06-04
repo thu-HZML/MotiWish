@@ -181,6 +181,7 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+
                 // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
@@ -198,13 +199,20 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
+                // 控制底部栏是否显示：非启动页且不是专注计时界面时显示
+                val showBottomBar by remember(currentRoute) {
+                    derivedStateOf {
+                        currentRoute != null && currentRoute != "splash" && !currentRoute.startsWith("focusTimer")
+                    }
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
                         bottomBar = {
-                            if (currentRoute != "splash") {
+                            if (showBottomBar) {
                                 NavigationBar(
                                     containerColor = Color.White,
                                     tonalElevation = 0.dp

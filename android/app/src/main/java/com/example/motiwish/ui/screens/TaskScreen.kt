@@ -32,6 +32,9 @@ import com.example.motiwish.data.network.TokenManager
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.motiwish.data.model.OneShotTask
 import com.example.motiwish.data.network.PricingSession
 
@@ -53,8 +56,8 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
     })
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
+    /*
     var isFirstLoad by remember { mutableStateOf(true) }
 
     LaunchedEffect(isFirstLoad) {
@@ -65,25 +68,19 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
             isFirstLoad = false
         }
     }
+    */
 
-    // 监听返回结果（添加任务成功后的提示）
-    LaunchedEffect(Unit) {
-        val savedStateHandle = navController.currentBackStackEntry?.savedStateHandle
-        savedStateHandle?.getLiveData<Boolean>("periodic_task_added")?.observeForever { added ->
-            if (added == true) {
-                scope.launch {
-                    snackbarHostState.showSnackbar("周期任务添加成功")
-                }
-                savedStateHandle.remove<Boolean>("periodic_task_added")
+    // 生命周期监听：页面每次可见时刷新数据
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.syncTasksFromRemote()
             }
         }
-        savedStateHandle?.getLiveData<Boolean>("one_shot_task_added")?.observeForever { added ->
-            if (added == true) {
-                scope.launch {
-                    snackbarHostState.showSnackbar("一次性任务添加成功")
-                }
-                savedStateHandle.remove<Boolean>("one_shot_task_added")
-            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -408,7 +405,7 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
 
                                         if (task.status == "ACTIVE" && !task.evaluated) {
                                             if (task.settlementTrack == "exploration") {
-                                                // 探索任务：显示专注时长和按钮
+                                                // 探索任务
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween
@@ -419,35 +416,44 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                                     }
                                                     Button(
                                                         onClick = {
-                                                            // 跳转到专注计时界面
                                                             navController.navigate("focusTimer/${task.id}/${task.progress}/${task.estimatedFocusMinutes ?: 0}")
                                                         }
                                                     ) {
                                                         Text(if (task.progress > 0) "继续探索" else "开始探索")
                                                     }
                                                 }
+                                                // 手动结算按钮
+                                                Button(
+                                                    onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    enabled = task.progress > 0  // 至少有一点进度才能结算
+                                                ) {
+                                                    Text("手动评估并结算")
+                                                }
                                             } else {
+                                                // Regular 任务
                                                 Slider(
                                                     value = task.progress.toFloat(),
                                                     onValueChange = { newProgress ->
-                                                        viewModel.updateLocalProgressOnly(
-                                                            task.id,
-                                                            newProgress.toInt()
-                                                        )
+                                                        viewModel.updateLocalProgressOnly(task.id, newProgress.toInt())
                                                     },
                                                     onValueChangeFinished = {
                                                         viewModel.persistProgress(task.id)
                                                     },
                                                     valueRange = 0f..100f,
-                                                    modifier = Modifier.fillMaxWidth()
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    enabled = task.progress < 100  // 达到100后禁用滑块
                                                 )
                                                 Text("进度: ${task.progress}%")
-                                            }
-                                            Button(
-                                                onClick = { viewModel.evaluateOneShotTask(task.id) },
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("手动评估")
+
+                                                // 手动结算按钮（始终可用，用于提前放弃/结算）
+                                                Button(
+                                                    onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                                                ) {
+                                                    Text(if (task.progress >= 100) "领取奖励" else "手动结算（放弃任务）")
+                                                }
                                             }
                                         } else {
                                             Text(
@@ -458,7 +464,10 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                                                 }}",
                                                 color = if (task.status == "COMPLETED") Color.Green else Color.Red
                                             )
-                                            Text("奖惩: ${task.reward - task.penalty}")
+                                            Text(
+                                                "奖惩: ${task.actualReward ?: task.reward} / ${task.actualPenalty ?: task.penalty}",
+                                                color = if (task.status == "COMPLETED") Color.Green else Color.Red
+                                            )
                                         }
 
                                         IconButton(

@@ -147,7 +147,8 @@ data class TaskOccurrence(
     val reward_transaction_id: Int?,
     val penalty_transaction_id: Int?,
     val created_at: String,
-    val updated_at: String
+    val updated_at: String,
+    val settlement_details: SettlementDetails? = null
 )
 
 data class TaskBrief(
@@ -173,6 +174,19 @@ data class TaskBrief(
     val due_at: String?,
     val created_at: String,
     val updated_at: String
+)
+
+data class SettlementDetails(
+    val settlement_track: String,
+    val formula: String,
+    val base_reward: Int,
+    val progress_ratio: Double,
+    val progress_factor: Double,
+    val time_factor: Double,
+    val reward_primary: Int,
+    val penalty_primary: Int,
+    val task_reward_primary: Int,
+    val task_penalty_primary: Int
 )
 
 // 完成任务相关
@@ -272,7 +286,7 @@ interface TaskApi {
     @GET("/api/v1/tasks/tasks/today/")
     suspend fun getTodayTasks(@Query("date") date: String? = null): TaskOccurrenceResponse
 
-    // 创建任务
+    // 创建任务（后端定价后自动创建任务，暂时用不到）
     @POST("/api/v1/tasks/tasks/")
     suspend fun createTask(@Body request: CreateTaskRequest): CreateTaskResponse
 

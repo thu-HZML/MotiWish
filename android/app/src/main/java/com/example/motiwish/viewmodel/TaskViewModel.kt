@@ -66,8 +66,6 @@ class TaskViewModel(
     // 生成定价草稿临时 ID
     private var nextDraftId = 1
 
-    private var pollingJob: Job? = null
-
     init {
         loadTodayMetric()
         loadTodayOccurrences()     // 从云端加载今日所有任务实例
@@ -126,7 +124,9 @@ class TaskViewModel(
                 penalty = if (occ.status in listOf("missed", "cancelled")) occ.task.penalty_primary else 0,
                 evaluated = occ.status != "pending",
                 estimatedFocusMinutes = occ.task.estimated_focus_minutes,   // 新增
-                settlementTrack = occ.task.settlement_track ?: "regular"    // 新增
+                settlementTrack = occ.task.settlement_track ?: "regular",    // 新增
+                actualReward = occ.settlement_details?.reward_primary,       // 实际获得奖励
+                actualPenalty = occ.settlement_details?.penalty_primary      // 实际获得惩罚
             )
         }
         _oneShotTasks.value = tasks
@@ -148,19 +148,38 @@ class TaskViewModel(
     // 在滑块松开时调用，保存进度到云端
     fun persistProgress(taskId: Int) {
         viewModelScope.launch {
-            // 获取当前本地进度
-            val currentTask = _oneShotTasks.value.find { it.id == taskId }
-            val progress = currentTask?.progress ?: return@launch
+            val currentTask = _oneShotTasks.value.find { it.id == taskId } ?: return@launch
+            val progress = currentTask.progress
             val success = taskRepository.updateOneShotProgress(taskId, progress)
             if (success) {
                 _uiMessage.emit("进度已保存")
-                // 从云端刷新一次以确保完全同步
-                loadTodayOccurrences()
+                // 如果是 regular 任务且进度 >= 100 且尚未完成，自动调用结算
+                if (currentTask.settlementTrack == "regular" && progress >= 100 && currentTask.status != "COMPLETED") {
+                    autoCompleteRegularTask(taskId, progress)
+                } else {
+                    loadTodayOccurrences()
+                }
             } else {
                 _uiMessage.emit("保存进度失败")
-                // 失败时回滚：重新从云端拉取正确数据
                 loadTodayOccurrences()
             }
+        }
+    }
+
+    // 新增：自动完成 regular 一次性任务
+    private suspend fun autoCompleteRegularTask(taskId: Int, progress: Int) {
+        try {
+            val occurrence = taskRepository.completeOneShotTask(taskId, progress)
+            val reward = if (occurrence.status == "completed") occurrence.task.reward_primary else 0
+            if (reward > 0) {
+                _uiMessage.emit("任务完成！获得 $reward 货币")
+            } else {
+                _uiMessage.emit("任务已完成，未获得奖励")
+            }
+            loadTodayOccurrences()
+        } catch (e: Exception) {
+            _uiMessage.emit("自动完成失败: ${e.message}")
+            loadTodayOccurrences()
         }
     }
 
@@ -226,7 +245,6 @@ class TaskViewModel(
                 // 根据返回的 occurrence 判断是否获得奖励（status == "completed" 时）
                 val reward = if (occurrence.status == "completed") occurrence.task.reward_primary else 0
                 if (reward > 0) {
-                    //currencyRepository.addPrimaryCurrency(reward, "周期任务奖励")
                     _uiMessage.emit("完成周期任务，获得 $reward 一级货币")
                 } else {
                     // 可能惩罚或没有奖励
@@ -470,15 +488,26 @@ class TaskViewModel(
         }
     }
 
-    // 评估一次性任务
-    fun evaluateOneShotTask(taskId: Int) {
+    // 手动完成一次性任务（用户点击按钮触发）
+    fun manuallyCompleteOneShotTask(taskId: Int) {
         viewModelScope.launch {
-            val success = taskRepository.evaluateOneShotTask(taskId)
-            if (success) {
-                _uiMessage.emit("任务评估成功")
+            val task = _oneShotTasks.value.find { it.id == taskId }
+            if (task == null) {
+                _uiMessage.emit("任务不存在")
+                return@launch
+            }
+            val progress = task.progress  // 当前进度
+            try {
+                val occurrence = taskRepository.completeOneShotTask(taskId, progress)
+                val reward = if (occurrence.status == "completed") occurrence.task.reward_primary else 0
+                if (reward > 0) {
+                    _uiMessage.emit("手动结算完成，获得 $reward 货币")
+                } else {
+                    _uiMessage.emit("结算完成，未获得奖励")
+                }
                 loadTodayOccurrences()
-            } else {
-                _uiMessage.emit("评估失败，请稍后重试")
+            } catch (e: Exception) {
+                _uiMessage.emit("手动结算失败: ${e.message}")
             }
         }
     }
@@ -507,20 +536,6 @@ class TaskViewModel(
                 _uiMessage.emit("同步失败：${e.message}")
             }
         }
-    }
-
-    fun refreshFromNetwork() {
-        viewModelScope.launch {
-            //taskRepository.syncAllTasks()
-            loadTodayOccurrences()
-            _uiMessage.emit("数据已同步")
-        }
-    }
-
-    // 自动结束轮询
-    override fun onCleared() {
-        super.onCleared()
-        pollingJob?.cancel()
     }
 }
 

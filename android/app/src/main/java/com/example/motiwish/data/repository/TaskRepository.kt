@@ -144,15 +144,9 @@ class TaskRepository(
         }
     }
 
-    suspend fun evaluateOneShotTask(taskId: Int): Boolean {
-        return try {
-            taskApi.evaluateOneShotTask(taskId)
-            // 评估后重新从云端拉取该任务的最新状态并更新本地
-            //syncAllTasks()   // 简单粗暴：全量同步。也可以单独拉取一个任务，但为了简便先这样
-            true
-        } catch (e: Exception) {
-            false
-        }
+    // 新增：手动完成一次性任务（regular 自动完成或 exploration 手动评估都调用此方法）
+    suspend fun completeOneShotTask(taskId: Int, progress: Int? = null): TaskOccurrence {
+        return completeTaskOccurrence(taskId, LocalDate.now(), progress)
     }
 
     // 获取任务历史记录
