@@ -47,6 +47,8 @@ fun TaskScreen(
 ){
     val showOnboarding by userViewModel.showOnboarding.collectAsStateWithLifecycle()
 
+    val showDynamicPrompt by userViewModel.showDynamicPrompt.collectAsStateWithLifecycle()
+
     LaunchedEffect(showOnboarding) {
         if (showOnboarding) {
             navController.navigate("onboarding") {
@@ -452,6 +454,16 @@ fun TaskScreen(
                 }
             }
         }
+    }
+    // 当 showDynamicPrompt 为 true 时，呼出底部半屏弹窗
+    if (showDynamicPrompt) {
+        DynamicProfileSheet(
+            viewModel = userViewModel,
+            onDismiss = {
+                // 因为我们在 ViewModel 里已经处理了关闭状态 (_showDynamicPrompt.value = false)
+                // 以及跳过 (skip) / 提交 (submit) 的逻辑，所以这里留空即可。
+            }
+        )
     }
 }
 

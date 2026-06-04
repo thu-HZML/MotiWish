@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 import android.util.Log
 import com.example.motiwish.data.network.BasicProfileRequest
+import com.example.motiwish.data.network.DynamicProfileData
 import com.example.motiwish.data.network.StableProfileRequest
 import com.example.motiwish.data.network.StableProfileResponse
 import retrofit2.HttpException
@@ -34,6 +35,13 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
 
     private val _stableProfileData = MutableStateFlow<StableProfileResponse?>(null)
     val stableProfileData = _stableProfileData.asStateFlow()
+
+    // 动态画像专用的状态和控制
+    private val _showDynamicPrompt = MutableStateFlow(false)
+    val showDynamicPrompt = _showDynamicPrompt.asStateFlow()
+
+    private val _dynamicProfileData = MutableStateFlow<DynamicProfileData?>(null)
+    val dynamicProfileData = _dynamicProfileData.asStateFlow()
 
     fun fetchUserProfile() {
         viewModelScope.launch {
@@ -66,26 +74,111 @@ class UserViewModel(private val userApi: UserApi) : ViewModel() {
         viewModelScope.launch {
             try {
                 val response = userApi.getProfilePromptStatus()
-                if (response.success) {
+                if (response.success && response.data != null) {
                     val status = response.data
-                    if (status != null) {
-                        Log.d("MotiWish_Profile", "后端状态：basic=${status.basic.should_prompt}, stable=${status.stable.should_prompt}")
 
-                        // ✅ 【核心修复】：不仅要看后端是否要求提醒，还要看是不是“从来没被提醒过”
-                        // 只要 last_prompted_at 不是 null，说明之前已经弹过向导并执行过 ack 了，坚决不再重复弹！
-                        val needsBasicOnboarding = status.basic.should_prompt && status.basic.last_prompted_at == null
-                        val needsStableOnboarding = status.stable.should_prompt && status.stable.last_prompted_at == null
+                    // 之前的逻辑：基础或稳定没填，弹强制向导
+                    val needsBasic = status.basic.should_prompt && status.basic.last_prompted_at == null
+                    val needsStable = status.stable.should_prompt && status.stable.last_prompted_at == null
+                    if (needsBasic || needsStable) {
+                        _showOnboarding.value = true
+                        return@launch // 强制向导优先级最高，有了它就不弹动态了
+                    }
 
-                        if (needsBasicOnboarding || needsStableOnboarding) {
-                            _showOnboarding.value = true
-                        }
+                    // 【新增逻辑】：如果不需要强制向导，且动态画像该提醒了，就弹出底部半屏
+                    if (status.dynamic.should_prompt) {
+                        fetchDynamicProfile() // 先拉取一下上次填的数据做回显
+                        _showDynamicPrompt.value = true
                     }
                 }
             } catch (e: Exception) {
-                Log.e("UserViewModel", "检查画像状态失败", e)
+                Log.e("UserViewModel", "检查画像失败", e)
             }
         }
     }
+    // 2. 拉取动态画像数据
+    fun fetchDynamicProfile() {
+        viewModelScope.launch {
+            try {
+                val res = userApi.getDynamicProfile()
+                if (res.success) _dynamicProfileData.value = res.data
+            } catch (e: Exception) {}
+        }
+    }
+
+    // 3. 提交动态画像
+    fun submitDynamicProfile(
+        stageTags: Set<String>,
+        stressLevel: Int,
+        sleepQuality: String,
+        moodState: String,
+        availableTimeLevel: String,
+        topGoal: String,
+        mainBlocker: String,
+        weeklyHoursStr: String
+    ) {
+        // 第一步依然是安全关闭弹窗防误触
+        _showDynamicPrompt.value = false
+
+        viewModelScope.launch {
+            try {
+                // 动态拼装增量字典（只传有有效值的字段）
+                val updateMap = mutableMapOf<String, Any>(
+                    "stress_level" to stressLevel
+                )
+
+                if (stageTags.isNotEmpty()) updateMap["current_stage_tags"] = stageTags.toList()
+                if (sleepQuality.isNotBlank()) updateMap["sleep_quality"] = sleepQuality
+                if (moodState.isNotBlank()) updateMap["mood_state"] = moodState
+                if (availableTimeLevel.isNotBlank()) updateMap["available_time_level"] = availableTimeLevel
+
+                if (topGoal.isNotBlank()) updateMap["current_top_goal"] = topGoal
+                if (mainBlocker.isNotBlank()) updateMap["current_main_blocker"] = mainBlocker
+
+                // 将字符串安全转为整数
+                weeklyHoursStr.toIntOrNull()?.let {
+                    updateMap["weekly_time_budget_hours"] = it
+                }
+
+                Log.d("MotiWish_Dynamic", "--> 1. 发送全量动态更新: $updateMap")
+                userApi.updateDynamicProfile(updateMap)
+
+                Log.d("MotiWish_Dynamic", "--> 2. 更新成功！正在发送确权...")
+                userApi.ackProfilePrompt(mapOf("layer" to "dynamic"))
+
+                Log.d("MotiWish_Dynamic", "--> 3. 确权成功！刷新状态墙...")
+                fetchDynamicProfile()
+
+            } catch (e: Exception) {
+                if (e is retrofit2.HttpException) {
+                    val errorJson = e.response()?.errorBody()?.string()
+                    Log.e("MotiWish_Dynamic", "--> ❌ 后端校验拒绝 (HTTP ${e.code()})！详情: $errorJson")
+                } else {
+                    Log.e("MotiWish_Dynamic", "--> ❌ 网络或其他异常: ${e.message}", e)
+                }
+            }
+        }
+    }
+
+    // 4. 跳过动态画像
+    fun skipDynamicPrompt() {
+        _showDynamicPrompt.value = false
+        viewModelScope.launch {
+            try {
+                Log.d("MotiWish_Dynamic", "--> 用户选择跳过，正在发送跳过确权...")
+                userApi.ackProfilePrompt(mapOf("layer" to "dynamic"))
+            } catch (e: Exception) {
+                Log.e("MotiWish_Dynamic", "--> 跳过确权失败: ${e.message}")
+            }
+        }
+    }
+
+    // 5. 主动呼出弹窗（供个人主页点击使用）
+    fun openDynamicPrompt() {
+        fetchDynamicProfile()
+        _showDynamicPrompt.value = true
+    }
+
     fun submitOnboarding(
         nickname: String,
         gender: String,

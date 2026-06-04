@@ -72,6 +72,18 @@ data class BasicProfileRequest(
     val focus_areas: List<String>
 )
 
+// 动态画像数据模型
+data class DynamicProfileData(
+    val current_stage_tags: List<String>? = null,
+    val stress_level: Int? = null,
+    val sleep_quality: String? = null,
+    val mood_state: String? = null,
+    val available_time_level: String? = null,
+    val current_top_goal: String? = null,
+    val current_main_blocker: String? = null,
+    val weekly_time_budget_hours: Int? = null
+)
+
 interface UserApi {
     // 获取当前用户信息接口
     @GET("api/v1/users/me/")
@@ -103,4 +115,14 @@ interface UserApi {
     // 获取用户的稳定画像数据
     @GET("api/v1/users/profile/stable/")
     suspend fun getStableProfile(): ApiResponse<StableProfileResponse>
+
+    // 获取动态画像
+    @GET("api/v1/users/profile/dynamic/")
+    suspend fun getDynamicProfile(): ApiResponse<DynamicProfileData>
+
+    // 提交/更新动态画像
+    @PATCH("api/v1/users/profile/dynamic/")
+    suspend fun updateDynamicProfile(
+        @Body request: @JvmSuppressWildcards Map<String, Any>
+    ): ApiResponse<DynamicProfileData>
 }
