@@ -55,6 +55,9 @@ import com.example.motiwish.BuildConfig
 import coil.ImageLoader
 import coil.Coil
 
+// 画像
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -197,10 +200,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             MySelfManagementAppTheme {
                 val navController = rememberNavController()
+
+
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
-                // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
+                // 在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
                 //val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
@@ -271,7 +276,11 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable("tasks") {
-                                TaskScreen(taskViewModel, navController)
+                                TaskScreen(
+                                    viewModel = taskViewModel,
+                                    userViewModel = userViewModel,
+                                    navController = navController
+                                )
                             }
 
                             // 【修改 2】：整合后的商城页面 (包含抽卡和商店)
@@ -340,6 +349,22 @@ class MainActivity : ComponentActivity() {
                                     viewModel = taskViewModel   // 传入已创建的实例
                                 )
                             }
+
+                            // 用户画像问卷
+                            composable("questionnaire") {
+                                QuestionnaireScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
+                            }
+
+                            composable("onboarding") {
+                                OnboardingScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
+                            }
+
                         }
                     }
                 }
