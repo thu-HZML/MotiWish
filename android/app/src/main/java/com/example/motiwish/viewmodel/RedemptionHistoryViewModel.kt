@@ -1,20 +1,30 @@
 package com.example.motiwish.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.network.NetworkRedemptionRecord
 import com.example.motiwish.data.network.ShopApi
+import com.example.motiwish.data.network.UserInventoryItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 class RedemptionHistoryViewModel(private val shopApi: ShopApi) : ViewModel() {
     private val _records = MutableStateFlow<List<NetworkRedemptionRecord>>(emptyList())
     val records: StateFlow<List<NetworkRedemptionRecord>> = _records.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    // 存放背包道具的列表
+    private val _inventoryList = MutableStateFlow<List<UserInventoryItem>>(emptyList())
+    val inventoryList = _inventoryList.asStateFlow()
+
+    private val _uiMessage = MutableSharedFlow<String>()
+    val uiMessage = _uiMessage.asSharedFlow()
 
     fun fetchHistory() {
         viewModelScope.launch {
@@ -44,6 +54,43 @@ class RedemptionHistoryViewModel(private val shopApi: ShopApi) : ViewModel() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    // 1. 获取背包列表
+    fun fetchInventory() {
+        viewModelScope.launch {
+            try {
+                val response = shopApi.getUserInventory()
+                if (response.success) {
+                    _inventoryList.value = response.data ?: emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e("InventoryViewModel", "获取背包失败", e)
+            }
+        }
+    }
+
+    // 2. 使用道具（带钱包刷新回调）
+    fun useItem(inventoryId: Int, onWalletRefreshNeeded: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val response = shopApi.useInventoryItem(inventoryId)
+                if (response.success) {
+                    _uiMessage.emit("道具使用成功！")
+
+                    // 刷新背包（数量扣减为 0 的会自动被后端过滤掉）
+                    fetchInventory()
+
+                    // 【核心】：触发回调，通知 CurrencyViewModel 去后端拉取最新余额，清零负债！
+                    onWalletRefreshNeeded()
+                } else {
+                    _uiMessage.emit("使用失败：${response.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("InventoryViewModel", "使用道具失败", e)
+                _uiMessage.emit("网络开小差了，请重试")
             }
         }
     }

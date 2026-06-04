@@ -1,5 +1,6 @@
 package com.example.motiwish.data.network
 
+import com.example.motiwish.data.model.Wish
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -47,6 +48,12 @@ data class RedemptionActionRequest(
     val refund: Boolean = false
 )
 
+data class UserInventoryItem(
+    val id: Int,
+    val item: Wish, // 后端嵌套的商品详情
+    val quantity: Int
+)
+
 interface ShopApi {
     @GET("api/v1/shop/items/")
     suspend fun getShopItems(): ApiResponse<PaginatedShopItems>
@@ -64,6 +71,14 @@ interface ShopApi {
         @Path("id") recordId: Int,
         @Body request: RedemptionActionRequest = RedemptionActionRequest()
     ): ApiResponse<NetworkRedemptionRecord>
+
+    // 1. 获取背包中数量大于 0 的道具
+    @GET("api/v1/shop/inventory/")
+    suspend fun getUserInventory(): ApiResponse<List<UserInventoryItem>> // 注意这里的数据模型
+
+    // 2. 使用背包中的道具 (调用后端的 use 接口)
+    @POST("api/v1/shop/inventory/{id}/use/")
+    suspend fun useInventoryItem(@Path("id") inventoryId: Int): ApiResponse<Any>
 }
 
 

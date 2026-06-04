@@ -313,7 +313,8 @@ class MainActivity : ComponentActivity() {
                             composable("redemption_history") {
                                 RedemptionHistoryScreen(
                                     navController = navController,
-                                    viewModel = redemptionHistoryViewModel
+                                    viewModel = redemptionHistoryViewModel,
+                                    currencyViewModel = currencyViewModel
                                 )
                             }
 
