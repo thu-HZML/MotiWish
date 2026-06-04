@@ -37,8 +37,8 @@ class TaskPricingAssistantTests(TestCase):
         self.assertEqual(session.quote_payload["reward_primary"], expected_reward)
         self.assertEqual(session.quote_payload["penalty_primary"], expected_penalty)
         self.assertIn("pricing_bounds", session.quote_payload)
-        self.assertIn("本次建议奖励", session.quote_payload["reasoning"])
-        self.assertIn("任务定价标准", session.pricing_standard_excerpt)
+        self.assertIn("Recommended reward", session.quote_payload["reasoning"])
+        self.assertEqual(session.pricing_standard_version, "task_pricing_v1")
         self.assertEqual(session.profile_snapshot["nickname"], "定价测试用户")
         return session
 
@@ -144,7 +144,7 @@ class TaskPricingAssistantTests(TestCase):
 
         self.assertEqual(len(revised.feedback_history), 1)
         self.assertGreater(revised.quote_payload["reward_primary"], session.quote_payload["reward_primary"])
-        self.assertIn("上一轮报价基础上上调", revised.quote_payload["reasoning"])
+        self.assertIn("Adjusted upward from previous quote", revised.quote_payload["reasoning"])
 
     def test_revise_task_pricing_can_reverse_after_reaching_lower_bound(self):
         session = self._create_session(

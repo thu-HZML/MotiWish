@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: MotiWish Backend API
   version: 0.2.0
-  description: 面向安卓端游戏化时间管理应用的统一后端接口。
+  description: 面向 Android 端游戏化时间管理应用的统一后端接口。
 paths:
   /api/v1/ai/report-jobs/:
     get:
@@ -594,6 +594,84 @@ paths:
                         total: 58
                         completed: 41
           description: ''
+  /api/v1/shop/inventory/:
+    get:
+      operationId: shop_inventory_list
+      summary: 获取库存列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInventoryListResponseList'
+          description: ''
+  /api/v1/shop/inventory/{id}/:
+    get:
+      operationId: shop_inventory_retrieve
+      summary: 获取单个库存道具
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 用户道具库存.
+        required: true
+      tags:
+      - Shop
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryDetailResponse'
+          description: ''
+  /api/v1/shop/inventory/{id}/use/:
+    post:
+      operationId: shop_inventory_use_create
+      description: 当前支持主动使用还债卡和放纵日卡。
+      summary: 使用库存道具
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this 用户道具库存.
+        required: true
+      tags:
+      - Shop
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserInventory'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserInventory'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserInventory'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InventoryUseResponse'
+          description: ''
   /api/v1/shop/items/:
     get:
       operationId: shop_items_list
@@ -615,7 +693,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedWishItemList'
+                $ref: '#/components/schemas/PaginatedShopItemListResponseList'
           description: ''
   /api/v1/shop/items/{id}/redeem/:
     post:
@@ -672,7 +750,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedRedemptionRecordList'
+                $ref: '#/components/schemas/PaginatedRedemptionRecordListResponseList'
           description: ''
   /api/v1/shop/redemptions/{id}/fulfill/:
     post:
@@ -710,7 +788,7 @@ paths:
   /api/v1/tasks/tasks/:
     get:
       operationId: tasks_tasks_list
-      description: 返回当前登录用户创建的任务模板列表。
+      description: 返回当前用户任务模板列表。
       summary: 获取任务列表
       parameters:
       - name: page
@@ -728,11 +806,11 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTaskList'
+                $ref: '#/components/schemas/PaginatedTaskListResponseList'
           description: ''
     post:
       operationId: tasks_tasks_create
-      description: 创建一个任务模板。现在支持常规轨道和探索轨道两种定价模式。
+      description: 创建任务模板，支持常规轨道、探索轨道，以及 AI 定价会话。
       summary: 创建任务
       tags:
       - Tasks
@@ -744,8 +822,8 @@ paths:
             examples:
               创建常规轨道周期任务:
                 value:
-                  title: 背单词 30 分钟
-                  description: 每天晚饭后完成
+                  title: Study 30 minutes
+                  description: Daily study task
                   task_type: recurring
                   recurrence: daily
                   settlement_track: regular
@@ -762,8 +840,8 @@ paths:
                   - english
               创建探索轨道任务:
                 value:
-                  title: 排查训练脚本中的隐藏 Bug
-                  description: 目标是定位数据预处理阶段的异常
+                  title: Debug training script
+                  description: Find preprocessing issue
                   task_type: one_time
                   recurrence: none
                   settlement_track: exploration
@@ -898,7 +976,8 @@ paths:
   /api/v1/tasks/tasks/{id}/complete/:
     post:
       operationId: tasks_tasks_complete_create
-      summary: 完成并结算任务
+      description: 完成任务实例以及应用奖励/惩罚。周期任务 settle_period=true 返回周期完成率、漏做次数以及惩罚明细。
+      summary: 完成结算任务
       parameters:
       - in: path
         name: id
@@ -913,6 +992,14 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TaskAction'
+            examples:
+              完成今天任务:
+                value:
+                  progress: 100
+              结算周期任务:
+                value:
+                  occurrence_date: '2026-06-04'
+                  settle_period: true
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/TaskAction'
@@ -928,92 +1015,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaskCompleteResponse'
           description: ''
-  /api/v1/tasks/tasks/{id}/pricing/apply/:
-    post:
-      operationId: tasks_tasks_pricing_apply_create
-      description: 供后续 AI 回调或人工测试使用：把 reward_primary / penalty_primary 和 AI 定价结果写回任务。
-      summary: 应用任务定价结果
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 任务.
-        required: true
-      tags:
-      - Tasks
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TaskPricingApply'
-            examples:
-              应用AI定价结果:
-                value:
-                  reward_primary: 120
-                  penalty_primary: 25
-                  pricing_payload:
-                    model: gpt-5.5
-                    reasoning: 该任务为高难度探索任务，预计专注 180 分钟。
-                    confidence: 0.84
-                summary: 应用 AI 定价结果
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/TaskPricingApply'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/TaskPricingApply'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskPricingApplyResponse'
-          description: ''
-  /api/v1/tasks/tasks/{id}/pricing/request/:
-    post:
-      operationId: tasks_tasks_pricing_request_create
-      description: 将任务标记为待 AI 定价，并固化当前定价上下文快照。当前接口只负责框架和状态流转，不执行真实 AI。
-      summary: 发起任务 AI 定价请求
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: integer
-        description: A unique integer value identifying this 任务.
-        required: true
-      tags:
-      - Tasks
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Task'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Task'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Task'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskPricingRequestResponse'
-          description: ''
   /api/v1/tasks/tasks/{id}/progress/:
     patch:
       operationId: tasks_tasks_progress_partial_update
-      description: 更新指定日期任务实例的实际完成进度；不传 occurrence_date 时默认更新今天。任务模板中的 progress_target
-        是目标值，不用于记录实际进度。
-      summary: 更新任务实际进度
+      description: 更新任务实例进度，progress_target=目标值。
+      summary: 更新任务进度
       parameters:
       - in: path
         name: id
@@ -1029,10 +1035,10 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedTaskProgressUpdate'
             examples:
-              更新今天的任务进度:
+              更新今天任务进度:
                 value:
                   progress: 60
-              更新指定日期的任务进度:
+              更新日期任务进度:
                 value:
                   occurrence_date: '2026-06-03'
                   progress: 80
@@ -1054,6 +1060,7 @@ paths:
   /api/v1/tasks/tasks/history/:
     get:
       operationId: tasks_tasks_history_retrieve
+      description: 返回当前用户任务实例历史记录。
       summary: 获取任务历史记录
       tags:
       - Tasks
@@ -1066,27 +1073,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaskHistoryResponse'
           description: ''
-  /api/v1/tasks/tasks/pricing/meta/:
-    get:
-      operationId: tasks_tasks_pricing_meta_retrieve
-      description: 返回前端构建任务定价表单和 AI 定价提示所需的模式、公式和难度系数提示。
-      summary: 获取任务定价元信息
-      tags:
-      - Tasks
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TaskPricingMetaResponse'
-          description: ''
   /api/v1/tasks/tasks/pricing/preview/:
     post:
       operationId: tasks_tasks_pricing_preview_create
-      description: 在真正调用 AI 定价前，先让后端对任务输入做模式归一化，返回将交给 AI 的标准化上下文。
-      summary: 预览任务定价请求载荷
+      description: AI 定价会话创建前，后端归一化任务草稿，返回类型、结算轨道、难度估算、规模以及定价范围。
+      summary: 预览任务定价上下文
       tags:
       - Tasks
       requestBody:
@@ -1095,16 +1086,17 @@ paths:
             schema:
               $ref: '#/components/schemas/TaskPricingPreview'
             examples:
-              探索轨道预览:
+              探索轨道任务定价预览:
                 value:
+                  title: Debug training script
                   task_type: one_time
                   recurrence: none
                   settlement_track: exploration
-                  difficulty_level: high
+                  auto_estimate_difficulty: true
                   estimated_focus_minutes: 180
                   tags:
+                  - debug
                   - research
-                  - coding
           application/x-www-form-urlencoded:
             schema:
               $ref: '#/components/schemas/TaskPricingPreview'
@@ -1124,13 +1116,13 @@ paths:
   /api/v1/tasks/tasks/today/:
     get:
       operationId: tasks_tasks_today_retrieve
-      summary: 获取指定日期的任务实例
+      summary: 获取日期任务实例
       parameters:
       - in: query
         name: date
         schema:
           type: string
-        description: 目标日期，格式 YYYY-MM-DD；不传则默认今天。
+        description: 目标日期，格式 YYYY-MM-DD；默认今天。
       tags:
       - Tasks
       security:
@@ -2415,6 +2407,56 @@ components:
       - data
       - message
       - success
+    InventoryDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserInventory'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    InventoryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserInventory'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    InventoryUseResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/UserInventory'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     JWTToken:
       type: object
       properties:
@@ -2773,7 +2815,7 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/GachaPool'
-    PaginatedRedemptionRecordList:
+    PaginatedInventoryListResponseList:
       type: object
       required:
       - success
@@ -2811,8 +2853,8 @@ components:
             results:
               type: array
               items:
-                $ref: '#/components/schemas/RedemptionRecord'
-    PaginatedTaskList:
+                $ref: '#/components/schemas/InventoryListResponse'
+    PaginatedRedemptionRecordListResponseList:
       type: object
       required:
       - success
@@ -2850,8 +2892,8 @@ components:
             results:
               type: array
               items:
-                $ref: '#/components/schemas/Task'
-    PaginatedWishItemList:
+                $ref: '#/components/schemas/RedemptionRecordListResponse'
+    PaginatedShopItemListResponseList:
       type: object
       required:
       - success
@@ -2889,7 +2931,46 @@ components:
             results:
               type: array
               items:
-                $ref: '#/components/schemas/WishItem'
+                $ref: '#/components/schemas/ShopItemListResponse'
+    PaginatedTaskListResponseList:
+      type: object
+      required:
+      - success
+      - code
+      - message
+      - data
+      properties:
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/TaskListResponse'
     PatchedAIReportJob:
       type: object
       properties:
@@ -3101,11 +3182,11 @@ components:
         occurrence_date:
           type: string
           format: date
-          description: 要更新进度的任务实例日期，默认今天。
+          description: 任务实例日期，今天。
         progress:
           type: integer
           minimum: 0
-          description: 任务实例的实际完成进度，不能超过任务的 progress_target。
+          description: 任务实例实际进度，不能超过 progress_target。
     PatchedTaskUpdate:
       type: object
       properties:
@@ -3118,7 +3199,7 @@ components:
           maxLength: 120
         description:
           type: string
-          description: 任务详细说明，可为空。
+          description: 任务说明，可为空。
         task_type:
           allOf:
           - $ref: '#/components/schemas/TaskTypeEnum'
@@ -3137,27 +3218,29 @@ components:
           type: integer
           minimum: 0
           nullable: true
-          description: 探索轨道任务可填写的预估专注时长（分钟）。
+          description: 探索轨道任务预计专注时长，分钟。
         weekdays:
           type: array
           items:
             type: integer
             maximum: 6
             minimum: 0
-          description: weekly 任务使用，0=周一，6=周日。
+          description: 周任务使用，0 表示周一，6 表示周日。
         month_days:
           type: array
           items:
             type: integer
             maximum: 31
             minimum: 1
-          description: monthly 任务使用，例如 [1, 15, 28]。
+          description: 月任务使用，例如 [1, 15, 28]。
         metric_key:
           type: string
+          description: 进度目标标识，可为空。
           maxLength: 50
         target_value:
           type: integer
           nullable: true
+          description: 进度目标值，可为空。
         reward_primary:
           type: integer
           maximum: 2147483647
@@ -3187,6 +3270,7 @@ components:
           title: 完成定价时间
         pricing_snapshot:
           readOnly: true
+          description: 后端定价上下文快照。
         starts_on:
           type: string
           format: date
@@ -3222,12 +3306,12 @@ components:
           type: integer
           minimum: 0
           writeOnly: true
-          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+          description: 任务实例实际进度，默认更新今天。
         occurrence_date:
           type: string
           format: date
           writeOnly: true
-          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
+          description: 更新进度任务实例日期，progress。
     PenaltyToleranceEnum:
       enum:
       - low
@@ -3518,6 +3602,24 @@ components:
       - item
       - owner
       - updated_at
+    RedemptionRecordListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedemptionRecord'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     RedemptionRecordStatusEnum:
       enum:
       - requested
@@ -3655,6 +3757,24 @@ components:
       description: |-
         * `regular` - 常规轨道
         * `exploration` - 探索轨道
+    ShopItemListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WishItem'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     ShopItemRedeemResponse:
       type: object
       properties:
@@ -3824,7 +3944,7 @@ components:
           maxLength: 120
         description:
           type: string
-          description: 任务详细说明，可为空。
+          description: 任务说明，可为空。
         task_type:
           allOf:
           - $ref: '#/components/schemas/TaskTypeEnum'
@@ -3843,27 +3963,29 @@ components:
           type: integer
           minimum: 0
           nullable: true
-          description: 探索轨道任务可填写的预估专注时长（分钟）。
+          description: 探索轨道任务预计专注时长，分钟。
         weekdays:
           type: array
           items:
             type: integer
             maximum: 6
             minimum: 0
-          description: weekly 任务使用，0=周一，6=周日。
+          description: 周任务使用，0 表示周一，6 表示周日。
         month_days:
           type: array
           items:
             type: integer
             maximum: 31
             minimum: 1
-          description: monthly 任务使用，例如 [1, 15, 28]。
+          description: 月任务使用，例如 [1, 15, 28]。
         metric_key:
           type: string
+          description: 进度目标标识，可为空。
           maxLength: 50
         target_value:
           type: integer
           nullable: true
+          description: 进度目标值，可为空。
         progress_target:
           type: integer
           maximum: 2147483647
@@ -3898,6 +4020,7 @@ components:
           title: 完成定价时间
         pricing_snapshot:
           readOnly: true
+          description: 后端定价上下文快照。
         starts_on:
           type: string
           format: date
@@ -3945,11 +4068,15 @@ components:
         occurrence_date:
           type: string
           format: date
-          description: 要结算的任务实例日期，默认今天。
+          description: 任务实例日期，今天。
         progress:
           type: integer
           minimum: 0
-          description: 本次完成时写入的进度值；不传则自动使用任务的 progress_target。
+          description: 当前进度值，探索轨道任务使用分钟。
+        settle_period:
+          type: boolean
+          default: false
+          description: 周期结算，true 返回惩罚明细。
     TaskCompleteResponse:
       type: object
       properties:
@@ -4012,6 +4139,24 @@ components:
       - data
       - message
       - success
+    TaskListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
     TaskOccurrence:
       type: object
       properties:
@@ -4022,6 +4167,7 @@ components:
           allOf:
           - $ref: '#/components/schemas/Task'
           readOnly: true
+          description: 任务模板。
         occurrence_date:
           type: string
           format: date
@@ -4046,6 +4192,9 @@ components:
           type: integer
           nullable: true
           readOnly: true
+        settlement_details:
+          readOnly: true
+          description: 任务结算明细：奖励、惩罚、周期完成率。
         created_at:
           type: string
           format: date-time
@@ -4062,6 +4211,7 @@ components:
       - occurrence_date
       - penalty_transaction_id
       - reward_transaction_id
+      - settlement_details
       - task
       - updated_at
     TaskOccurrenceStatusEnum:
@@ -4076,38 +4226,6 @@ components:
         * `completed` - 已完成
         * `missed` - 已错过
         * `cancelled` - 已取消
-    TaskPricingApply:
-      type: object
-      properties:
-        reward_primary:
-          type: integer
-          minimum: 0
-          description: AI 产出的一级货币奖励。
-        penalty_primary:
-          type: integer
-          minimum: 0
-          description: AI 产出的一级货币惩罚。
-        pricing_payload:
-          description: AI 回写的完整定价结果，可包含理由、置信度、分段信息等。
-      required:
-      - penalty_primary
-      - reward_primary
-    TaskPricingApplyResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/Task'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     TaskPricingBoundValue:
       type: object
       properties:
@@ -4239,95 +4357,130 @@ components:
       required:
       - task_type
       - title
-    TaskPricingMeta:
-      type: object
-      properties:
-        settlement_tracks: {}
-        formulas: {}
-        difficulty_factors: {}
-      required:
-      - difficulty_factors
-      - formulas
-      - settlement_tracks
-    TaskPricingMetaResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/TaskPricingMeta'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     TaskPricingPreview:
       type: object
       properties:
+        title:
+          type: string
+          default: ''
+          description: 定价任务标题。
+          maxLength: 120
+        description:
+          type: string
+          default: ''
+          description: 定价任务说明。
         task_type:
-          $ref: '#/components/schemas/TaskTypeEnum'
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          description: |-
+            任务类型。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
         recurrence:
           allOf:
           - $ref: '#/components/schemas/RecurrenceEnum'
           default: none
+          description: |-
+            重复规则。
+
+            * `none` - 不重复
+            * `daily` - 每天
+            * `weekly` - 每周
+            * `monthly` - 每月
         settlement_track:
           allOf:
           - $ref: '#/components/schemas/SettlementTrackEnum'
           default: regular
+          description: |-
+            结算轨道: regular=常规轨道, exploration=探索轨道。
+
+            * `regular` - 常规轨道
+            * `exploration` - 探索轨道
         difficulty_level:
           allOf:
           - $ref: '#/components/schemas/DifficultyLevelEnum'
           default: medium
+          description: |-
+            任务难度，后端自动估算。
+
+            * `low` - 低
+            * `medium` - 中
+            * `high` - 高
+        auto_estimate_difficulty:
+          type: boolean
+          default: true
+          description: 自动估算任务难度。
         estimated_focus_minutes:
           type: integer
           minimum: 0
           nullable: true
+          description: 探索轨道任务预计专注时长，分钟。
         progress_target:
           type: integer
           minimum: 0
           default: 100
+          description: 任务进度目标。
         metric_key:
           type: string
           default: ''
+          description: 进度目标标识。
           maxLength: 50
         target_value:
           type: integer
           nullable: true
+          description: 进度目标值。
         weekdays:
           type: array
           items:
             type: integer
             maximum: 6
             minimum: 0
+          description: 周任务使用日期，0 表示周一。
         month_days:
           type: array
           items:
             type: integer
             maximum: 31
             minimum: 1
+          description: 月任务使用日期。
         tags:
           type: array
           items:
             type: string
             maxLength: 50
+          description: 任务标签。
       required:
       - task_type
     TaskPricingPreviewPayload:
       type: object
       properties:
         settlement_track:
-          $ref: '#/components/schemas/SettlementTrackEnum'
+          allOf:
+          - $ref: '#/components/schemas/SettlementTrackEnum'
+          description: |-
+            结算轨道。
+
+            * `regular` - 常规轨道
+            * `exploration` - 探索轨道
         task_type:
-          $ref: '#/components/schemas/TaskTypeEnum'
+          allOf:
+          - $ref: '#/components/schemas/TaskTypeEnum'
+          description: |-
+            任务类型。
+
+            * `daily` - 日常任务
+            * `recurring` - 周期任务
+            * `one_time` - 一次性任务
         formula:
           type: string
-        normalized_payload: {}
+          description: 定价公式。
+        normalized_payload:
+          description: 后端任务定价上下文。
         difficulty_factor_hint:
           type: integer
+          description: 探索轨道难度系数提示。
       required:
       - formula
       - normalized_payload
@@ -4394,22 +4547,6 @@ components:
       - reward_primary
       - risk_notes
       - user_fit_notes
-    TaskPricingRequestResponse:
-      type: object
-      properties:
-        data:
-          $ref: '#/components/schemas/Task'
-        success:
-          type: boolean
-        code:
-          type: string
-        message:
-          type: string
-      required:
-      - code
-      - data
-      - message
-      - success
     TaskProgressUpdateResponse:
       type: object
       properties:
@@ -4482,7 +4619,7 @@ components:
           maxLength: 120
         description:
           type: string
-          description: 任务详细说明，可为空。
+          description: 任务说明，可为空。
         task_type:
           allOf:
           - $ref: '#/components/schemas/TaskTypeEnum'
@@ -4501,27 +4638,29 @@ components:
           type: integer
           minimum: 0
           nullable: true
-          description: 探索轨道任务可填写的预估专注时长（分钟）。
+          description: 探索轨道任务预计专注时长，分钟。
         weekdays:
           type: array
           items:
             type: integer
             maximum: 6
             minimum: 0
-          description: weekly 任务使用，0=周一，6=周日。
+          description: 周任务使用，0 表示周一，6 表示周日。
         month_days:
           type: array
           items:
             type: integer
             maximum: 31
             minimum: 1
-          description: monthly 任务使用，例如 [1, 15, 28]。
+          description: 月任务使用，例如 [1, 15, 28]。
         metric_key:
           type: string
+          description: 进度目标标识，可为空。
           maxLength: 50
         target_value:
           type: integer
           nullable: true
+          description: 进度目标值，可为空。
         reward_primary:
           type: integer
           maximum: 2147483647
@@ -4551,6 +4690,7 @@ components:
           title: 完成定价时间
         pricing_snapshot:
           readOnly: true
+          description: 后端定价上下文快照。
         starts_on:
           type: string
           format: date
@@ -4586,12 +4726,12 @@ components:
           type: integer
           minimum: 0
           writeOnly: true
-          description: 任务实例的实际完成进度，默认更新今天的任务实例。
+          description: 任务实例实际进度，默认更新今天。
         occurrence_date:
           type: string
           format: date
           writeOnly: true
-          description: 要更新进度的任务实例日期，仅在同时提交 progress 时使用。
+          description: 更新进度任务实例日期，progress。
       required:
       - created_at
       - id
@@ -4743,6 +4883,36 @@ components:
       - prompt_profile
       - total_experience
       - username
+    UserInventory:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        item:
+          allOf:
+          - $ref: '#/components/schemas/WishItem'
+          readOnly: true
+        quantity:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          title: 持有数量
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - created_at
+      - id
+      - item
+      - updated_at
     Wallet:
       type: object
       properties:

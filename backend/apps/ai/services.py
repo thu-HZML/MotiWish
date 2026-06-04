@@ -5,6 +5,7 @@ from apps.ai.graphs.task_pricing import build_task_pricing_graph
 from apps.ai.models import AITaskPricingSession
 from apps.tasks.models import PricingStatus
 from apps.tasks.serializers import TaskSerializer
+from apps.tasks.pricing import estimate_difficulty_level, estimate_task_size
 from apps.users.models import DynamicProfile
 
 
@@ -106,8 +107,15 @@ def accept_task_pricing_session(*, session):
         raise ValueError("只有等待反馈的定价会话可以接受")
 
     quote = session.quote_payload
+    inferred_difficulty = quote.get("pricing_bounds", {}).get("difficulty_level") or estimate_difficulty_level(
+        {**session.task_payload, "auto_estimate_difficulty": True}
+    )
+    inferred_size = quote.get("pricing_bounds", {}).get("task_size") or estimate_task_size(
+        {**session.task_payload, "difficulty_level": inferred_difficulty}
+    )
     task_payload = {
         **session.task_payload,
+        "difficulty_level": inferred_difficulty,
         "reward_primary": quote["reward_primary"],
         "penalty_primary": quote["penalty_primary"],
         "pricing_status": PricingStatus.APPLIED,
@@ -120,6 +128,7 @@ def accept_task_pricing_session(*, session):
         "ai_metadata": {
             **(session.task_payload.get("ai_metadata") or {}),
             "pricing_session_id": session.id,
+            "task_size": inferred_size,
         },
     }
     serializer = TaskSerializer(data=task_payload)
