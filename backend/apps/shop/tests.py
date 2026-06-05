@@ -41,7 +41,9 @@ class ShopServiceTests(TestCase):
 
     def test_clamp_price_by_tier(self):
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.SMALL, suggested_price=10), 30)
+        self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.MEDIUM, suggested_price=100), 120)
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.MEDIUM, suggested_price=200), 200)
+        self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.LARGE, suggested_price=300), 350)
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.LARGE, suggested_price=1500), 1200)
 
     def test_ensure_default_shop_items_creates_public_catalog_once(self):
