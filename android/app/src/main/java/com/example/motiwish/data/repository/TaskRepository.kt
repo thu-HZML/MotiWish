@@ -60,44 +60,25 @@ class TaskRepository(
     // 评估日常指标（调用 API）
     suspend fun evaluateDailyMetric(metric: DailyMetric): Int {
         val request = EvaluateDailyMetricRequest(
-            wake_up_time = metric.wakeUpTime,
+            wake_time = metric.wakeUpTime,      // 假设 "HH:MM" 格式
             sleep_time = metric.sleepTime,
-            phone_usage_minutes = metric.phoneUsageMinutes,
+            phone_minutes = metric.phoneUsageMinutes,
             water_cups = metric.waterCups
         )
         val response = taskApi.evaluateDailyMetric(request)
-        if (response.success) {
+        if (response.success && response.data != null) {
             metric.evaluated = true
-            metric.reward = response.reward
+            metric.reward = response.data.reward_primary
+            metric.feedback = response.data.feedback
             saveDailyMetric(metric)
-            return response.reward
+            return response.data.reward_primary
         } else {
             throw Exception(response.message)
         }
     }
 
     // ---------- 周期任务 ----------
-    suspend fun deletePeriodicTask(task: PeriodicTask) {
-        try {
-            val response = taskApi.deleteTask(task.id)
-            if (response.isSuccessful) {
-                taskDao.deletePeriodicTask(task)   // API 成功，删除本地
-            } else {
-                throw Exception("删除失败: ${response.code()}")
-            }
-        } catch (e: Exception) {
-            // 网络失败或后端错误，抛出让 ViewModel 处理
-            throw Exception("删除周期任务失败: ${e.message}")
-        }
-    }
 
-    suspend fun isPeriodicTaskCompletedToday(taskId: Int, date: LocalDate): Boolean {
-        return taskDao.getPeriodicTaskCompletion(taskId, date) != null
-    }
-
-    fun getAllPeriodicTaskCompletions(): Flow<List<PeriodicTaskCompletion>> = taskDao.getAllPeriodicTaskCompletions()
-
-    suspend fun getPeriodicTaskById(id: Int): PeriodicTask? = taskDao.getPeriodicTaskById(id)
 
     // ---------- 一次性任务 ----------
     suspend fun updateOneShotTask(task: OneShotTask) {

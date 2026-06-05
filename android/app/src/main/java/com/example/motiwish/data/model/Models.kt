@@ -15,7 +15,8 @@ data class DailyMetric(
     var phoneUsageMinutes: Int = 0,
     var waterCups: Int = 0,
     var reward: Int = 0,
-    var evaluated: Boolean = false
+    var evaluated: Boolean = false,
+    var feedback: String = ""   // 新增
 )
 
 @Entity(tableName = "periodic_tasks")
@@ -27,6 +28,7 @@ data class PeriodicTask(
     val dayOfWeek: Int? = null,
     val dayOfMonth: Int? = null,
     val rewardAmount: Int,
+    val penaltyAmount: Int,
     val active: Boolean = true,
     val createdDate: LocalDate = LocalDate.now()   // 新增字段，默认值为今天
 )
