@@ -408,6 +408,41 @@ paths:
                       - 个人信息收集清单：说明收集字段、使用场景、是否必要。
                       - 未成年人说明：说明监护、使用限制与个人信息保护补充要求。
           description: ''
+  /api/v1/daily/evaluate/:
+    post:
+      operationId: daily_evaluate_create
+      description: 提交起床时间、睡觉时间、手机使用时长和饮水杯数，后端 Agent 结合用户画像和近期日常历史给出反馈和一级货币奖励。同一用户同一日期只会首次发放奖励。
+      summary: 评估今日日常指标
+      tags:
+      - Daily
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DailyMetricEvaluate'
+            examples:
+              评估今日日常:
+                value:
+                  wake_time: 07:30
+                  sleep_time: '23:40'
+                  phone_minutes: 180
+                  water_cups: 5
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DailyMetricEvaluate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DailyMetricEvaluate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyMetricEvaluateResponse'
+          description: ''
   /api/v1/gacha/pools/:
     get:
       operationId: gacha_pools_list
@@ -2152,6 +2187,106 @@ components:
       - data
       - message
       - success
+    DailyMetricEvaluate:
+      type: object
+      properties:
+        record_date:
+          type: string
+          format: date
+          description: Record date. Defaults to today.
+        wake_time:
+          type: string
+          description: Wake-up time in HH:MM format.
+          pattern: ^\d{2}:\d{2}$
+        sleep_time:
+          type: string
+          description: Sleep time in HH:MM format.
+          pattern: ^\d{2}:\d{2}$
+        phone_minutes:
+          type: integer
+          minimum: 0
+          description: Phone usage minutes today.
+        water_cups:
+          type: integer
+          minimum: 0
+          description: Water cups today.
+      required:
+      - phone_minutes
+      - sleep_time
+      - wake_time
+      - water_cups
+    DailyMetricEvaluateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/DailyMetricReward'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    DailyMetricReward:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        record_date:
+          type: string
+          format: date
+        wake_time:
+          type: string
+          format: time
+        sleep_time:
+          type: string
+          format: time
+        phone_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        water_cups:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        score:
+          type: integer
+          maximum: 32767
+          minimum: 0
+        reward_primary:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        feedback:
+          type: string
+        agent_payload: {}
+        reward_transaction_id:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+      required:
+      - created_at
+      - feedback
+      - id
+      - record_date
+      - reward_transaction_id
+      - sleep_time
+      - updated_at
+      - wake_time
     DashboardReportPayload:
       type: object
       properties:

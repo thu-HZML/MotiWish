@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.users",
     "apps.tasks",
+    "apps.daily",
     "apps.wallet",
     "apps.gacha",
     "apps.shop",

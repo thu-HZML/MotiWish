@@ -15,6 +15,7 @@ urlpatterns = [
     path("api/v1/common/", include("apps.common.urls")),
     path("api/v1/users/", include("apps.users.urls")),
     path("api/v1/tasks/", include("apps.tasks.urls")),
+    path("api/v1/daily/", include("apps.daily.urls")),
     path("api/v1/wallet/", include("apps.wallet.urls")),
     path("api/v1/gacha/", include("apps.gacha.urls")),
     path("api/v1/shop/", include("apps.shop.urls")),

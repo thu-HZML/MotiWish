@@ -46,7 +46,7 @@ class TaskPricingAssistantTests(TestCase):
         self.assert_quote(
             {
                 "title": "英语听力 30 分钟",
-                "task_type": "daily",
+                "task_type": "recurring",
                 "recurrence": "daily",
                 "settlement_track": "regular",
                 "difficulty_level": "medium",
@@ -220,7 +220,7 @@ class TaskPricingAssistantApiTests(TestCase):
                 {
                     "task_payload": {
                         "title": "英语听力 30 分钟",
-                        "task_type": "daily",
+                        "task_type": "recurring",
                         "recurrence": "daily",
                         "settlement_track": "regular",
                         "difficulty_level": "medium",
@@ -324,7 +324,7 @@ class TaskPricingLiveModelSmokeTest(TestCase):
             task_payload={
                 "title": "完成 30 分钟英语听力训练",
                 "description": "听一段材料并整理 5 个生词",
-                "task_type": "daily",
+                "task_type": "recurring",
                 "recurrence": "daily",
                 "settlement_track": "regular",
                 "difficulty_level": "medium",

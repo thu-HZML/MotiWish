@@ -29,6 +29,8 @@ class TaskSerializer(serializers.ModelSerializer):
         starts_on = attrs.get("starts_on", getattr(self.instance, "starts_on", None))
         ends_on = attrs.get("ends_on", getattr(self.instance, "ends_on", None))
         estimated_focus_minutes = attrs.get("estimated_focus_minutes", getattr(self.instance, "estimated_focus_minutes", None))
+        if task_type == "daily":
+            raise serializers.ValidationError({"task_type": "daily is reserved for daily metrics; use /api/v1/daily/evaluate/."})
         if starts_on and ends_on and starts_on > ends_on:
             raise serializers.ValidationError("参数不符合要求。")
         if recurrence == "weekly" and not weekdays:
