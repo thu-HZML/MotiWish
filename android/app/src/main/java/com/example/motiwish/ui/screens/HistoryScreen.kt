@@ -62,28 +62,31 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("任务日历") },
+                title = { Text("任务日历", color = Color.White) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White,
+                    navigationIconContentColor = Color.White
                 ),
                 actions = {
-                    // 月份切换按钮
                     IconButton(onClick = { currentYearMonth = currentYearMonth.minusMonths(1) }) {
-                        Icon(Icons.Default.ChevronLeft, contentDescription = "上个月")
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "上个月", tint = Color.White)
                     }
                     Text(
                         text = currentYearMonth.format(DateTimeFormatter.ofPattern("yyyy年 MMM")),
                         modifier = Modifier.padding(horizontal = 8.dp),
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        color = Color.White
                     )
                     IconButton(onClick = { currentYearMonth = currentYearMonth.plusMonths(1) }) {
-                        Icon(Icons.Default.ChevronRight, contentDescription = "下个月")
+                        Icon(Icons.Default.ChevronRight, contentDescription = "下个月", tint = Color.White)
                     }
                     IconButton(onClick = { currentYearMonth = YearMonth.now() }) {
-                        Icon(Icons.Default.Today, contentDescription = "今天")
+                        Icon(Icons.Default.Today, contentDescription = "今天", tint = Color.White)
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                        Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = Color.White)
                     }
                 }
             )

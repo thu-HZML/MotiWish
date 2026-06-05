@@ -115,18 +115,36 @@ data class TaskData(
     val updated_at: String
 )
 
-// 日常指标评估请求
+// 请求体：评估日常指标
 data class EvaluateDailyMetricRequest(
-    val wake_up_time: String,
-    val sleep_time: String,
-    val phone_usage_minutes: Int,
+    val wake_time: String,      // 格式 "HH:MM"
+    val sleep_time: String,     // 格式 "HH:MM"
+    val phone_minutes: Int,
     val water_cups: Int
 )
 
+// 评估日常指标响应体
 data class EvaluateDailyMetricResponse(
     val success: Boolean,
-    val reward: Int,
-    val message: String
+    val code: String,
+    val message: String,
+    val data: DailyMetricEvaluationData?
+)
+
+data class DailyMetricEvaluationData(
+    val id: Int,
+    val record_date: String,    // "YYYY-MM-DD"
+    val wake_time: String,      // ISO 时间或字符串
+    val sleep_time: String,
+    val phone_minutes: Int,
+    val water_cups: Int,
+    val score: Int,
+    val reward_primary: Int,
+    val feedback: String,
+    val agent_payload: Any? = null,
+    val reward_transaction_id: Int?,
+    val created_at: String,
+    val updated_at: String
 )
 
 // ---------- 历史记录相关模型 ----------
@@ -291,7 +309,7 @@ interface TaskApi {
     suspend fun createTask(@Body request: CreateTaskRequest): CreateTaskResponse
 
     // 评估日常指标
-    @POST("/api/daily-metrics/evaluate")
+    @POST("/api/v1/daily/evaluate/")
     suspend fun evaluateDailyMetric(@Body request: EvaluateDailyMetricRequest): EvaluateDailyMetricResponse
 
     // 完成任务
@@ -307,10 +325,6 @@ interface TaskApi {
         @Path("id") id: Int,
         @Body request: PartialUpdateTaskRequest
     ): TaskData  // 返回更新后的完整任务数据
-
-    // 评估一次性任务（通常后端会自动评估，但也可以手动触发）
-    @POST("/api/one-shot-tasks/{id}/evaluate")
-    suspend fun evaluateOneShotTask(@Path("id") id: Int)
 
     // 删除任务
     @DELETE("/api/v1/tasks/tasks/{id}/")
@@ -331,23 +345,6 @@ interface TaskApi {
         @Body request: FeedbackRequest
     ): FeedbackResponse
 }
-
-// 请求体 DTO
-data class OneShotTaskRequest(
-    val title: String,
-    val description: String,
-    val due_at: LocalDateTime,
-    val reward_primary: Int = 0,
-    val penalty_primary: Int = 0
-)
-
-data class PeriodicTaskRequest(
-    val title: String,
-    val task_type: String,      // "daily", "weekly", "monthly"
-    val weekdays: List<Int>? = null,
-    val month_days: List<Int>? = null,
-    val reward_primary: Int
-)
 
 // 部分更新任务请求体 DTO（所有字段可选，对应 PATCH 语义）
 data class PartialUpdateTaskRequest(

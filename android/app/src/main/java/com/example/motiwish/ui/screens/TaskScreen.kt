@@ -15,6 +15,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.TextButton
 import androidx.navigation.NavController
 import com.example.motiwish.viewmodel.TaskViewModel
 import com.example.motiwish.viewmodel.TodayPeriodicTask
@@ -32,6 +42,7 @@ import com.example.motiwish.data.network.TokenManager
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -40,6 +51,8 @@ import com.example.motiwish.data.network.PricingSession
 
 import com.example.motiwish.viewmodel.UserViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.motiwish.data.model.DailyMetric
+import com.example.motiwish.data.model.TaskDraft
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,18 +88,6 @@ fun TaskScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
-    /*
-    var isFirstLoad by remember { mutableStateOf(true) }
-
-    LaunchedEffect(isFirstLoad) {
-        if (isFirstLoad) {
-            if (TokenManager.getToken() != null) {
-                viewModel.syncTasksFromRemote()
-            }
-            isFirstLoad = false
-        }
-    }
-    */
     LaunchedEffect(Unit) {
         userViewModel.checkProfilePromptStatus()
     }
@@ -102,6 +103,12 @@ fun TaskScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.uiMessage.collect { message ->
+            snackbarHostState.showSnackbar(message)
         }
     }
 
@@ -125,414 +132,72 @@ fun TaskScreen(
         ) {
             // ---------- 日常指标卡片 ----------
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "今日日常指标",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        if (todayMetric?.evaluated == true) {
-                            Text("今日已评估，获得: ${todayMetric?.reward ?: 0} 货币")
-                        } else {
-                            OutlinedTextField(
-                                value = todayMetric?.wakeUpTime ?: "",
-                                onValueChange = {
-                                    viewModel.updateDailyMetric(
-                                        it,
-                                        todayMetric?.sleepTime ?: "",
-                                        todayMetric?.phoneUsageMinutes ?: 0,
-                                        todayMetric?.waterCups ?: 0
-                                    )
-                                },
-                                label = { Text("起床时间 (HH:MM)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = todayMetric?.sleepTime ?: "",
-                                onValueChange = {
-                                    viewModel.updateDailyMetric(
-                                        todayMetric?.wakeUpTime ?: "",
-                                        it,
-                                        todayMetric?.phoneUsageMinutes ?: 0,
-                                        todayMetric?.waterCups ?: 0
-                                    )
-                                },
-                                label = { Text("睡觉时间 (HH:MM)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = (todayMetric?.phoneUsageMinutes ?: 0).toString(),
-                                onValueChange = {
-                                    val intValue = it.toIntOrNull() ?: 0
-                                    viewModel.updateDailyMetric(
-                                        todayMetric?.wakeUpTime ?: "",
-                                        todayMetric?.sleepTime ?: "",
-                                        intValue,
-                                        todayMetric?.waterCups ?: 0
-                                    )
-                                },
-                                label = { Text("手机使用时长 (分钟)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = (todayMetric?.waterCups ?: 0).toString(),
-                                onValueChange = {
-                                    val intValue = it.toIntOrNull() ?: 0
-                                    viewModel.updateDailyMetric(
-                                        todayMetric?.wakeUpTime ?: "",
-                                        todayMetric?.sleepTime ?: "",
-                                        todayMetric?.phoneUsageMinutes ?: 0,
-                                        intValue
-                                    )
-                                },
-                                label = { Text("喝水杯数") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Button(
-                                onClick = { viewModel.evaluateDailyMetric() },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                            ) {
-                                Text("评估今日日常")
-                            }
-                        }
-                    }
-                }
+                DailyMetricCard(
+                    todayMetric = todayMetric,
+                    viewModel = viewModel
+                )
             }
 
             // ---------- 定价中任务卡片 ----------
             if (taskDrafts.isNotEmpty()) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "定价中的任务",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            taskDrafts.forEach { draft ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = draft.title,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    when (draft.status) {
-                                        "pricing" -> {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(16.dp),
-                                                    strokeWidth = 2.dp
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text("AI 定价中...", style = MaterialTheme.typography.bodySmall)
-                                            }
-                                        }
-                                        "quoted" -> {
-                                            Button(
-                                                onClick = { viewModel.showPricingDialog(draft.id) },
-                                                modifier = Modifier.wrapContentWidth()
-                                            ) {
-                                                Text("已定价，点击查看")
-                                            }
-                                        }
-                                        "repricing" -> {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(16.dp),
-                                                    strokeWidth = 2.dp
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text("AI 重新定价中...", style = MaterialTheme.typography.bodySmall)
-                                            }
-                                        }
-                                        else -> {
-                                            // 可处理其他状态（如 repricing）
-                                            Text(draft.status, style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                }
-                                if (draft != taskDrafts.last()) {
-                                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                                }
-                            }
-                        }
-                    }
+                    PricingDraftsCard(
+                        drafts = taskDrafts,
+                        viewModel = viewModel
+                    )
                 }
             }
 
-            // ---------- 周期任务卡片 ----------
+            // ---------- 周期任务标题 ----------
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "今日周期任务",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        if (sortedPeriodicTasks.isEmpty()) {
-                            Text("今日没有周期任务")
-                        } else {
-                            var showDeleteDialog by remember { mutableStateOf(false) }
-                            var taskToDelete by remember { mutableStateOf<TodayPeriodicTask?>(null) }
-
-                            sortedPeriodicTasks.forEach { task ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(task.name, style = MaterialTheme.typography.bodyLarge)
-                                        task.description?.let {
-                                            Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                        }
-                                        if (task.pricingStatus == "pending") {
-                                            Text("AI定价中", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                        } else {
-                                            Text("奖励: ${task.rewardAmount}", style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (task.completed) {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = "已完成", tint = Color.Green)
-                                        } else {
-                                            if (task.pricingStatus == "pending") {
-                                                Button(
-                                                    enabled = false,
-                                                    onClick = { },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f))
-                                                ) {
-                                                    Text("定价中")
-                                                }
-                                            } else {
-                                                Button(
-                                                    onClick = { viewModel.completePeriodicTask(task) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                                                ) {
-                                                    Text("完成")
-                                                }
-                                            }
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                taskToDelete = task
-                                                showDeleteDialog = true
-                                            }
-                                        ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "删除")
-                                        }
-                                    }
-                                }
-                                Divider()
-                            }
-
-                            if (showDeleteDialog && taskToDelete != null) {
-                                AlertDialog(
-                                    onDismissRequest = { showDeleteDialog = false },
-                                    title = { Text("确认删除") },
-                                    text = { Text("确定要删除任务 \"${taskToDelete?.name}\" 吗？") },
-                                    confirmButton = {
-                                        TextButton(
-                                            onClick = {
-                                                taskToDelete?.let { viewModel.deletePeriodicTask(it) }
-                                                showDeleteDialog = false
-                                                taskToDelete = null
-                                            }
-                                        ) {
-                                            Text("删除")
-                                        }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = {
-                                            showDeleteDialog = false
-                                            taskToDelete = null
-                                        }) {
-                                            Text("取消")
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = "今日任务",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp, start = 16.dp)
+                )
             }
 
-            // ---------- 一次性任务卡片 ----------
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "一次性任务",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        if (sortedOneShotTasks.isEmpty()) {
-                            Text("暂无一次性任务")
-                        } else {
-                            val showDeleteDialogState = remember { mutableStateOf(false) }
-                            val taskToDeleteState = remember { mutableStateOf<OneShotTask?>(null) }
-
-                            sortedOneShotTasks.forEach { task ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text(task.name, style = MaterialTheme.typography.titleMedium)
-                                        Text(task.description, style = MaterialTheme.typography.bodySmall)
-                                        Text(
-                                            "截止: ${task.deadline.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))}",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
-
-                                        if (task.status == "ACTIVE" && !task.evaluated) {
-                                            if (task.settlementTrack == "exploration") {
-                                                // 探索任务
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween
-                                                ) {
-                                                    Column {
-                                                        Text("预估专注: ${task.estimatedFocusMinutes ?: 0} 分钟")
-                                                        Text("已专注: ${task.progress} 分钟")
-                                                    }
-                                                    Button(
-                                                        onClick = {
-                                                            navController.navigate("focusTimer/${task.id}/${task.progress}/${task.estimatedFocusMinutes ?: 0}")
-                                                        }
-                                                    ) {
-                                                        Text(if (task.progress > 0) "继续探索" else "开始探索")
-                                                    }
-                                                }
-                                                // 手动结算按钮
-                                                Button(
-                                                    onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    enabled = task.progress > 0  // 至少有一点进度才能结算
-                                                ) {
-                                                    Text("手动评估并结算")
-                                                }
-                                            } else {
-                                                // Regular 任务
-                                                Slider(
-                                                    value = task.progress.toFloat(),
-                                                    onValueChange = { newProgress ->
-                                                        viewModel.updateLocalProgressOnly(task.id, newProgress.toInt())
-                                                    },
-                                                    onValueChangeFinished = {
-                                                        viewModel.persistProgress(task.id)
-                                                    },
-                                                    valueRange = 0f..100f,
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    enabled = task.progress < 100  // 达到100后禁用滑块
-                                                )
-                                                Text("进度: ${task.progress}%")
-
-                                                // 手动结算按钮（始终可用，用于提前放弃/结算）
-                                                Button(
-                                                    onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                                                ) {
-                                                    Text(if (task.progress >= 100) "领取奖励" else "手动结算（放弃任务）")
-                                                }
-                                            }
-                                        } else {
-                                            Text(
-                                                "状态: ${when (task.status) {
-                                                    "COMPLETED" -> "已完成"
-                                                    "FAILED" -> "失败"
-                                                    else -> "进行中"
-                                                }}",
-                                                color = if (task.status == "COMPLETED") Color.Green else Color.Red
-                                            )
-                                            Text(
-                                                "奖惩: ${task.actualReward ?: task.reward} / ${task.actualPenalty ?: task.penalty}",
-                                                color = if (task.status == "COMPLETED") Color.Green else Color.Red
-                                            )
-                                        }
-
-                                        IconButton(
-                                            onClick = {
-                                                taskToDeleteState.value = task
-                                                showDeleteDialogState.value = true
-                                            },
-                                            modifier = Modifier.align(Alignment.End)
-                                        ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "删除")
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (showDeleteDialogState.value && taskToDeleteState.value != null) {
-                                AlertDialog(
-                                    onDismissRequest = { showDeleteDialogState.value = false },
-                                    title = { Text("确认删除") },
-                                    text = { Text("确定要删除任务 \"${taskToDeleteState.value?.name}\" 吗？") },
-                                    confirmButton = {
-                                        TextButton(
-                                            onClick = {
-                                                taskToDeleteState.value?.let { viewModel.deleteOneShotTask(it) }
-                                                showDeleteDialogState.value = false
-                                                taskToDeleteState.value = null
-                                            }
-                                        ) {
-                                            Text("删除")
-                                        }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = {
-                                            showDeleteDialogState.value = false
-                                            taskToDeleteState.value = null
-                                        }) {
-                                            Text("取消")
-                                        }
-                                    }
-                                )
-                            }
-                        }
+            // ---------- 周期任务列表（每个任务一个 item）----------
+            items(sortedPeriodicTasks) { task ->
+                PeriodicTaskCard(
+                    task = task,
+                    viewModel = viewModel,
+                    snackbarHostState = snackbarHostState,
+                    onEdit = { taskToEdit ->
+                        // 这里实现编辑逻辑，例如跳转到编辑页面
+                        //scope.launch {
+                            //snackbarHostState.showSnackbar("编辑功能开发中：${taskToEdit.name}")
+                        //}
                     }
-                }
+                )
+            }
+
+            // ---------- 一次性任务标题 ----------
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text(
+                    text = "一次性任务",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 8.dp, start = 16.dp)
+                )
+            }
+
+            // ---------- 一次性任务列表（每个任务一个 item）----------
+            items(sortedOneShotTasks) { task ->
+                OneShotTaskCard(
+                    task = task,
+                    viewModel = viewModel,
+                    navController = navController,
+                    snackbarHostState = snackbarHostState,
+                    onEdit = { taskToEdit ->
+                        //scope.launch {
+                            //snackbarHostState.showSnackbar("编辑功能开发中：${taskToEdit.name}")
+                        //}
+                    }
+                )
             }
         }
 
@@ -547,6 +212,7 @@ fun TaskScreen(
             )
         }
     }
+
     // 当 showDynamicPrompt 为 true 时，呼出底部半屏弹窗
     if (showDynamicPrompt) {
         DynamicProfileSheet(
@@ -776,6 +442,72 @@ fun AddTaskScreen(viewModel: TaskViewModel, navController: NavController) {
     }
 }
 
+// 定价中任务卡片
+@Composable
+fun PricingDraftsCard(
+    drafts: List<TaskDraft>,
+    viewModel: TaskViewModel
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "定价中的任务",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            drafts.forEach { draft ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = draft.title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    when (draft.status) {
+                        "pricing" -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("AI 定价中...", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        "quoted" -> {
+                            Button(
+                                onClick = { viewModel.showPricingDialog(draft.id) },
+                                modifier = Modifier.wrapContentWidth()
+                            ) {
+                                Text("已定价，点击查看")
+                            }
+                        }
+                        "repricing" -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("AI 重新定价中...", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        else -> {
+                            Text(draft.status, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                if (draft != drafts.last()) {
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun PricingDialog(
     session: PricingSession,
@@ -834,4 +566,491 @@ fun PricingDialog(
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DailyMetricCard(
+    todayMetric: DailyMetric?,
+    viewModel: TaskViewModel
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "今日日常指标",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            if (todayMetric?.evaluated == true) {
+                Text("今日已评估，获得: ${todayMetric.reward} 货币")
+            } else {
+                // 解析起床时间（从 "HH:MM" 字符串）
+                val wakeParts = (todayMetric?.wakeUpTime ?: "00:00").split(":").mapNotNull { it.toIntOrNull() }
+                val wakeHour = wakeParts.getOrElse(0) { 0 }.coerceIn(0, 23)
+                val wakeMinute = wakeParts.getOrElse(1) { 0 }.coerceIn(0, 59)
+
+                // 起床时间 - 小时 & 分钟并排
+                Text("起床时间", style = MaterialTheme.typography.bodyMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = if (wakeHour == 0 && wakeMinute == 0) "" else wakeHour.toString(),
+                        onValueChange = { newValue ->
+                            val newHour = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 23) ?: 0)
+                            val newTime = String.format("%02d:%02d", newHour, wakeMinute)
+                            viewModel.updateDailyMetric(
+                                newTime,
+                                todayMetric?.sleepTime ?: "",
+                                todayMetric?.phoneUsageMinutes ?: 0,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("小时") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = if (wakeHour == 0 && wakeMinute == 0) "" else wakeMinute.toString(),
+                        onValueChange = { newValue ->
+                            val newMinute = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 59) ?: 0)
+                            val newTime = String.format("%02d:%02d", wakeHour, newMinute)
+                            viewModel.updateDailyMetric(
+                                newTime,
+                                todayMetric?.sleepTime ?: "",
+                                todayMetric?.phoneUsageMinutes ?: 0,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("分钟") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                // 睡觉时间
+                val sleepParts = (todayMetric?.sleepTime ?: "00:00").split(":").mapNotNull { it.toIntOrNull() }
+                val sleepHour = sleepParts.getOrElse(0) { 0 }.coerceIn(0, 23)
+                val sleepMinute = sleepParts.getOrElse(1) { 0 }.coerceIn(0, 59)
+
+                Text("睡觉时间", style = MaterialTheme.typography.bodyMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = if (sleepHour == 0 && sleepMinute == 0) "" else sleepHour.toString(),
+                        onValueChange = { newValue ->
+                            val newHour = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 23) ?: 0)
+                            val newTime = String.format("%02d:%02d", newHour, sleepMinute)
+                            viewModel.updateDailyMetric(
+                                todayMetric?.wakeUpTime ?: "",
+                                newTime,
+                                todayMetric?.phoneUsageMinutes ?: 0,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("小时") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = if (sleepHour == 0 && sleepMinute == 0) "" else sleepMinute.toString(),
+                        onValueChange = { newValue ->
+                            val newMinute = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 59) ?: 0)
+                            val newTime = String.format("%02d:%02d", sleepHour, newMinute)
+                            viewModel.updateDailyMetric(
+                                todayMetric?.wakeUpTime ?: "",
+                                newTime,
+                                todayMetric?.phoneUsageMinutes ?: 0,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("分钟") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                // 手机使用时长：小时 + 分钟（数字输入）
+                Text("手机使用时长", style = MaterialTheme.typography.bodyMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val totalMinutes = todayMetric?.phoneUsageMinutes ?: 0
+                    val hours = totalMinutes / 60
+                    val minutes = totalMinutes % 60
+
+                    // 手机使用时长的“小时”输入框
+                    val hoursText = if (hours == 0) "" else hours.toString()
+                    OutlinedTextField(
+                        value = hoursText,
+                        onValueChange = { newValue ->
+                            val newHours = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 23) ?: 0)
+                            val newTotal = newHours * 60 + minutes
+                            viewModel.updateDailyMetric(
+                                todayMetric?.wakeUpTime ?: "",
+                                todayMetric?.sleepTime ?: "",
+                                newTotal,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("小时") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    // 手机使用时长的“分钟”输入框
+                    val minutesText = if (minutes == 0) "" else minutes.toString()
+                    OutlinedTextField(
+                        value = minutesText,
+                        onValueChange = { newValue ->
+                            val newMinutes = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull()?.coerceIn(0, 59) ?: 0)
+                            val newTotal = hours * 60 + newMinutes
+                            viewModel.updateDailyMetric(
+                                todayMetric?.wakeUpTime ?: "",
+                                todayMetric?.sleepTime ?: "",
+                                newTotal,
+                                todayMetric?.waterCups ?: 0
+                            )
+                        },
+                        label = { Text("分钟") },
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
+                // 喝水杯数
+                val waterCups = todayMetric?.waterCups ?: 0
+                val waterText = if (waterCups == 0) "" else waterCups.toString()
+                OutlinedTextField(
+                    value = waterText,
+                    onValueChange = { newValue ->
+                        val cups = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull() ?: 0)
+                        viewModel.updateDailyMetric(
+                            todayMetric?.wakeUpTime ?: "",
+                            todayMetric?.sleepTime ?: "",
+                            todayMetric?.phoneUsageMinutes ?: 0,
+                            cups
+                        )
+                    },
+                    label = { Text("喝水杯数") },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                Button(
+                    onClick = { viewModel.evaluateDailyMetric() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("评估今日日常")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePickerDialog(
+    initialTime: String,  // 格式 "HH:MM"
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    // 解析初始小时和分钟
+    val parts = initialTime.split(":").mapNotNull { it.toIntOrNull() }
+    val initialHour = parts.getOrElse(0) { 0 }.coerceIn(0, 23)
+    val initialMinute = parts.getOrElse(1) { 0 }.coerceIn(0, 59)
+
+    val timePickerState = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = MaterialTheme.shapes.medium,
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TimePicker(state = timePickerState)
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("取消")
+                    }
+                    TextButton(
+                        onClick = {
+                            val hour = timePickerState.hour
+                            val minute = timePickerState.minute
+                            val timeStr = String.format("%02d:%02d", hour, minute)
+                            onConfirm(timeStr)
+                        }
+                    ) {
+                        Text("确定")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// 周期任务卡片
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PeriodicTaskCard(
+    task: TodayPeriodicTask,
+    viewModel: TaskViewModel,
+    snackbarHostState: SnackbarHostState,
+    onEdit: (TodayPeriodicTask) -> Unit
+) {
+    var showBottomSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showBottomSheet = true },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(task.name, style = MaterialTheme.typography.titleMedium)
+                task.description?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                if (task.pricingStatus == "pending") {
+                    Text("AI定价中", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("奖励: ${task.rewardAmount}", style = MaterialTheme.typography.bodySmall)
+                        if (!task.completed) {
+                            Text(
+                                "惩罚: ${task.penaltyAmount}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (task.completed) {
+                Button(
+                    onClick = { /* 已完成，无操作 */ },
+                    enabled = false,  // 禁用点击
+                    modifier = Modifier.width(100.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = Color.Gray
+                    )
+                ) {
+                    Text("已完成")
+                }
+            } else {
+                Button(
+                    onClick = { viewModel.completePeriodicTask(task) },
+                    modifier = Modifier.width(100.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                ) {
+                    Text("完成")
+                }
+            }
+        }
+    }
+
+    // 底部操作菜单
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        showBottomSheet = false
+                        onEdit(task)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("编辑", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                Divider()
+                TextButton(
+                    onClick = {
+                        showBottomSheet = false
+                        viewModel.deletePeriodicTask(task)   // 直接删除
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("删除", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
+}
+
+// 一次性任务卡片
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OneShotTaskCard(
+    task: OneShotTask,
+    viewModel: TaskViewModel,
+    navController: NavController,
+    snackbarHostState: SnackbarHostState,
+    onEdit: (OneShotTask) -> Unit
+) {
+    var showBottomSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showBottomSheet = true },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(task.name, style = MaterialTheme.typography.titleMedium)
+            Text(task.description, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "截止: ${task.deadline.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))}",
+                style = MaterialTheme.typography.bodySmall
+            )
+            // 显示奖励和惩罚（预估）
+            if (task.status == "ACTIVE" && !task.evaluated) {
+                Text("奖励: ${task.reward}  /  惩罚: ${task.penalty}", style = MaterialTheme.typography.bodySmall)
+            }
+
+            when {
+                task.status == "ACTIVE" && !task.evaluated -> {
+                    if (task.settlementTrack == "exploration") {
+                        Text("专注进度: ${task.progress} / ${task.estimatedFocusMinutes ?: 0} 分钟")
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    navController.navigate("focusTimer/${task.id}/${task.progress}/${task.estimatedFocusMinutes ?: 0}")
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(if (task.progress > 0) "继续探索" else "开始探索")
+                            }
+                            Button(
+                                onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
+                                modifier = Modifier.weight(1f),
+                                enabled = task.progress > 0
+                            ) {
+                                Text("手动评估并结算")
+                            }
+                        }
+                    } else {
+                        Text("完成进度: ${task.progress}%")
+                        Slider(
+                            value = task.progress.toFloat(),
+                            onValueChange = { newProgress ->
+                                viewModel.updateLocalProgressOnly(task.id, newProgress.toInt())
+                            },
+                            onValueChangeFinished = {
+                                viewModel.persistProgress(task.id)
+                            },
+                            valueRange = 0f..100f,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = task.progress < 100
+                        )
+                        Button(
+                            onClick = { viewModel.manuallyCompleteOneShotTask(task.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text(if (task.progress >= 100) "领取奖励" else "手动结算（放弃任务）")
+                        }
+                    }
+                }
+                else -> {
+                    Text(
+                        "状态: ${when (task.status) {
+                            "COMPLETED" -> "已完成"
+                            "FAILED" -> "失败"
+                            else -> "进行中"
+                        }}"
+                    )
+                    Text(
+                        "奖惩: ${task.actualReward ?: task.reward} / ${task.actualPenalty ?: task.penalty}",
+                        color = if (task.status == "COMPLETED") MaterialTheme.colorScheme.primary else Color.Red
+                    )
+                }
+            }
+        }
+    }
+
+    // 底部操作菜单
+    if (showBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showBottomSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        showBottomSheet = false
+                        onEdit(task)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("编辑", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                }
+                Divider()
+                TextButton(
+                    onClick = {
+                        showBottomSheet = false
+                        viewModel.deleteOneShotTask(task)   // 直接删除
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("删除", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+    }
 }

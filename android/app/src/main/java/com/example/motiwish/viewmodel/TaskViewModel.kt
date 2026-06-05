@@ -90,6 +90,7 @@ class TaskViewModel(
                     id = occ.task.id,
                     name = occ.task.title,
                     rewardAmount = occ.task.reward_primary,
+                    penaltyAmount = occ.task.penalty_primary,
                     completed = occ.status == "completed",
                     pricingStatus = occ.task.pricing_status ?: "applied",
                     description = occ.task.description
@@ -120,8 +121,8 @@ class TaskViewModel(
                     "missed", "cancelled" -> "FAILED"
                     else -> "ACTIVE"
                 },
-                reward = if (occ.status == "completed") occ.task.reward_primary else 0,
-                penalty = if (occ.status in listOf("missed", "cancelled")) occ.task.penalty_primary else 0,
+                reward = occ.task.reward_primary,
+                penalty = occ.task.penalty_primary,
                 evaluated = occ.status != "pending",
                 estimatedFocusMinutes = occ.task.estimated_focus_minutes,   // 新增
                 settlementTrack = occ.task.settlement_track ?: "regular",    // 新增
@@ -198,13 +199,15 @@ class TaskViewModel(
 
     fun updateDailyMetric(wakeUpTime: String, sleepTime: String, phoneUsage: Int, waterCups: Int) {
         viewModelScope.launch {
-            val metric = _todayMetric.value ?: return@launch
-            metric.wakeUpTime = wakeUpTime
-            metric.sleepTime = sleepTime
-            metric.phoneUsageMinutes = phoneUsage
-            metric.waterCups = waterCups
-            taskRepository.saveDailyMetric(metric)
-            _todayMetric.value = metric
+            val oldMetric = _todayMetric.value ?: return@launch
+            val updatedMetric = oldMetric.copy(
+                wakeUpTime = wakeUpTime,
+                sleepTime = sleepTime,
+                phoneUsageMinutes = phoneUsage,
+                waterCups = waterCups
+            )
+            taskRepository.saveDailyMetric(updatedMetric)
+            _todayMetric.value = updatedMetric
         }
     }
 
@@ -212,24 +215,19 @@ class TaskViewModel(
     // 这里我们先暂时仅做本地评估，或者通过通知服务器完成特定任务（需要跟后端确认）
     fun evaluateDailyMetric() {
         viewModelScope.launch {
-            val metric = _todayMetric.value ?: return@launch
-            if (metric.evaluated) {
+            val oldMetric = _todayMetric.value ?: return@launch
+            if (oldMetric.evaluated) {
                 _uiMessage.emit("今日已评估")
                 return@launch
             }
-            //try {
-            //    val reward = taskRepository.evaluateDailyMetric(metric)
-            //    _todayMetric.value = metric
-            //    if (reward > 0) {
-            //        currencyRepository.addPrimaryCurrency(reward, "日常任务奖励")
-            //        _uiMessage.emit("获得 $reward 货币")
-            //    } else if (reward < 0) {
-            //        currencyRepository.deductPrimaryCurrency(-reward, "日常任务惩罚")
-            //        _uiMessage.emit("扣除 ${-reward} 货币")
-            //    }
-            //} catch (e: Exception) {
-            //    _uiMessage.emit("评估失败: ${e.message}")
-            //}
+            try {
+                val reward = taskRepository.evaluateDailyMetric(oldMetric)
+                val updatedMetric = oldMetric.copy(evaluated = true, reward = reward)
+                _todayMetric.value = updatedMetric
+                _uiMessage.emit("获得 $reward 货币")
+            } catch (e: Exception) {
+                _uiMessage.emit("评估失败: ${e.message}")
+            }
         }
     }
 
@@ -544,6 +542,7 @@ data class TodayPeriodicTask(
     val id: Int,
     val name: String,
     val rewardAmount: Int,
+    val penaltyAmount: Int,
     val completed: Boolean,
     val pricingStatus: String,  // AI定价状态："pending", "quoted", "applied"
     val description: String? = null
