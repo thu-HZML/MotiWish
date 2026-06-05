@@ -21,6 +21,7 @@ data class NetworkShopItem(
     val title: String,
     val description: String?,
     val price_secondary: Int,
+    val inventory: Int?,       // 库存
     val item_kind: String
 )
 // 后端返回的是分页列表

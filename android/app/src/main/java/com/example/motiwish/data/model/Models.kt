@@ -79,7 +79,8 @@ data class Wish(
     val costSecondary: Int,
     val isSystem: Boolean = false,
     val custom: Boolean = true,
-    val enabled: Boolean = true
+    val enabled: Boolean= true,
+    val inventory: Int? = null
 )
 
 @Entity(tableName = "currency_balance")

@@ -38,9 +38,27 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.motiwish.data.model.OneShotTask
 import com.example.motiwish.data.network.PricingSession
 
+import com.example.motiwish.viewmodel.UserViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
+fun TaskScreen(
+    viewModel: TaskViewModel,
+    userViewModel: UserViewModel,
+    navController: NavController
+){
+    val showOnboarding by userViewModel.showOnboarding.collectAsStateWithLifecycle()
+
+    val showDynamicPrompt by userViewModel.showDynamicPrompt.collectAsStateWithLifecycle()
+
+    LaunchedEffect(showOnboarding) {
+        if (showOnboarding) {
+            navController.navigate("onboarding") {
+                launchSingleTop = true
+            }
+        }
+    }
     val todayMetric by viewModel.todayMetric.collectAsState()
     val todaysPeriodicTasks by viewModel.todaysPeriodicTasks.collectAsState()
     val oneShotTasks by viewModel.oneShotTasks.collectAsState()
@@ -69,6 +87,9 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
         }
     }
     */
+    LaunchedEffect(Unit) {
+        userViewModel.checkProfilePromptStatus()
+    }
 
     // 生命周期监听：页面每次可见时刷新数据
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -525,6 +546,16 @@ fun TaskScreen(viewModel: TaskViewModel, navController: NavController) {
                 onDismiss = { viewModel.dismissPricingDialog() }
             )
         }
+    }
+    // 当 showDynamicPrompt 为 true 时，呼出底部半屏弹窗
+    if (showDynamicPrompt) {
+        DynamicProfileSheet(
+            viewModel = userViewModel,
+            onDismiss = {
+                // 因为我们在 ViewModel 里已经处理了关闭状态 (_showDynamicPrompt.value = false)
+                // 以及跳过 (skip) / 提交 (submit) 的逻辑，所以这里留空即可。
+            }
+        )
     }
 }
 

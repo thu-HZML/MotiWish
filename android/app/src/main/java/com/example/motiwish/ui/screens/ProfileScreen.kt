@@ -43,7 +43,9 @@ fun ProfileScreen(
     historyViewModel: HistoryViewModel,
     userViewModel: UserViewModel
 ){
-    // 【修改点 1】：收集本地钱包状态，并同时收集远端 UserProfile 状态
+
+
+    // 收集本地钱包状态，并同时收集远端 UserProfile 状态
     val balance by currencyViewModel.balance.collectAsStateWithLifecycle()
     val transactions by currencyViewModel.transactions.collectAsStateWithLifecycle()
     val userProfile by userViewModel.userProfile.collectAsStateWithLifecycle()
@@ -93,10 +95,18 @@ fun ProfileScreen(
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 if (!userProfile?.avatar_url.isNullOrEmpty()) {
+                    val rawUrl = userProfile?.avatar_url
+                    val fullAvatarUrl = if (rawUrl?.startsWith("http") == true) {
+                        rawUrl
+                    } else if (rawUrl?.startsWith("/") == true) {
+                        "https://8.147.57.94$rawUrl"
+                    } else {
+                        "https://8.147.57.94/$rawUrl"
+                    }
                     // 后端有头像链接，使用 Coil 加载
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(userProfile?.avatar_url)
+                            .data(fullAvatarUrl)
                             .crossfade(true) // 开启淡入淡出动画
                             .build(),
                         contentDescription = "Avatar",
@@ -243,7 +253,16 @@ fun ProfileScreen(
             onClick = { navController.navigate("redemption_history") }
         )
 
-        // 【修改点 4】：使用 Spacer 把退出登录按钮推到屏幕最底部，并使用醒目的错误色（红色）
+        // 画像（问卷）入口
+        // ==========================================
+        ProfileMenuItem(
+            icon = { Icon(Icons.Default.Person, contentDescription = null) }, // 使用用户图标
+            title = "自我探索画像",
+            subtitle = "完善你的行为偏好，获取更精准的 AI 推荐",
+            onClick = { navController.navigate("questionnaire") }
+        )
+
+        // 使用 Spacer 把退出登录按钮推到屏幕最底部，并使用醒目的错误色（红色）
         Spacer(modifier = Modifier.weight(1f))
 
         Button(

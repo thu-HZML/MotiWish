@@ -54,6 +54,12 @@ import javax.net.ssl.X509TrustManager
 // 日志拦截器
 //import okhttp3.logging.HttpLoggingInterceptor
 
+import coil.ImageLoader
+import coil.Coil
+
+// 画像
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var database: AppDatabase
@@ -175,14 +181,40 @@ class MainActivity : ComponentActivity() {
 
         scheduleDailyReminder()
 
+        // 【加回保险 2：强行给 Coil 注入信任证书的加载器】
+        // ==========================================
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+
+        // 创建 Coil 专用的 OkHttpClient（不需要拦截器，只要忽略证书）
+        val coilOkHttpClient = OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+
+        val customImageLoader = ImageLoader.Builder(this)
+            .okHttpClient(coilOkHttpClient)
+            .build()
+
+        // 强制替换全局的默认 ImageLoader
+        Coil.setImageLoader(customImageLoader)
+
         setContent {
             MySelfManagementAppTheme {
                 val navController = rememberNavController()
+
+
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
 
                 // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
+                // 在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
                 //val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
@@ -260,7 +292,11 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable("tasks") {
-                                TaskScreen(taskViewModel, navController)
+                                TaskScreen(
+                                    viewModel = taskViewModel,
+                                    userViewModel = userViewModel,
+                                    navController = navController
+                                )
                             }
 
                             // 【修改 2】：整合后的商城页面 (包含抽卡和商店)
@@ -329,6 +365,22 @@ class MainActivity : ComponentActivity() {
                                     viewModel = taskViewModel   // 传入已创建的实例
                                 )
                             }
+
+                            // 用户画像问卷
+                            composable("questionnaire") {
+                                QuestionnaireScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
+                            }
+
+                            composable("onboarding") {
+                                OnboardingScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
+                            }
+
                         }
                     }
                 }

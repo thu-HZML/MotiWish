@@ -20,7 +20,7 @@ class ShopViewModel(
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
 
     init {
-        fetchRealShopItems()
+        //fetchRealShopItems()
     }
     fun fetchRealShopItems() {
         viewModelScope.launch {
@@ -34,13 +34,14 @@ class ShopViewModel(
                             name = networkItem.title,
                             costSecondary = networkItem.price_secondary,
                             isSystem = true,
-                            custom = false
+                            custom = false,
+                            inventory = networkItem.inventory
                         )
                     }
                     _wishes.value = realWishes
                 }
             } catch (e: Exception) {
-                _uiMessage.emit("获取商店列表失败，请检查网络")
+                _uiMessage.emit("报错啦: ${e.javaClass.simpleName} - ${e.message}")
             }
         }
     }
@@ -81,21 +82,6 @@ class ShopViewModel(
         } catch (e: Exception) {
             _uiMessage.emit("网络异常，兑换失败")
             return false
-        }
-    }
-
-    fun refreshSystemWish() {
-        viewModelScope.launch {
-            val randomWishes = listOf(
-                Wish(name = "奶茶一杯", costSecondary = 30, isSystem = true, custom = false),
-                Wish(name = "健身房周卡", costSecondary = 150, isSystem = true, custom = false),
-                Wish(name = "音乐会门票", costSecondary = 300, isSystem = true, custom = false),
-                Wish(name = "精美笔记本", costSecondary = 60, isSystem = true, custom = false),
-                Wish(name = "下午茶套餐", costSecondary = 90, isSystem = true, custom = false)
-            )
-            val newWish = randomWishes.random()
-            wishRepository.addWish(newWish)
-            _uiMessage.emit("系统刷新了新愿望：${newWish.name}")
         }
     }
 }

@@ -22,7 +22,7 @@ from apps.common.openapi import api_envelope_serializer
     list=extend_schema(
         tags=["AI"],
         summary="获取 AI 报告任务列表",
-        responses=api_envelope_serializer("AIReportJobListResponse", AIReportJobSerializer(many=True)),
+        responses=AIReportJobSerializer(many=True),
     ),
     create=extend_schema(
         tags=["AI"],
@@ -35,6 +35,9 @@ from apps.common.openapi import api_envelope_serializer
         summary="获取单个 AI 报告任务",
         responses=api_envelope_serializer("AIReportJobDetailResponse", AIReportJobSerializer()),
     ),
+    update=extend_schema(tags=["AI"], summary="更新 AI 报告任务", request=AIReportJobSerializer),
+    partial_update=extend_schema(tags=["AI"], summary="部分更新 AI 报告任务", request=AIReportJobSerializer),
+    destroy=extend_schema(tags=["AI"], summary="删除 AI 报告任务"),
 )
 class AIReportJobViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -52,7 +55,7 @@ class AIReportJobViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     list=extend_schema(
         tags=["AI"],
         summary="获取任务定价会话列表",
-        responses=api_envelope_serializer("AITaskPricingSessionListResponse", AITaskPricingSessionSerializer(many=True)),
+        responses=AITaskPricingSessionSerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["AI"],
