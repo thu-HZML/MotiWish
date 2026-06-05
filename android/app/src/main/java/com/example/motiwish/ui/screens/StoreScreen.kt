@@ -105,32 +105,41 @@ fun StoreScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            horizontalArrangement = Arrangement.spacedBy(12.dp) // 👈 按钮中间留出 12dp 的整齐间距
                         ) {
                             Button(
-                                onClick = {
-                                    gachaViewModel.draw(1)
-                                },
+                                onClick = { gachaViewModel.draw(1) },
                                 enabled = primaryBalance >= 50,
+                                modifier = Modifier.weight(1f), // 👈 核心：占据剩下空间的一半
+                                contentPadding = PaddingValues(vertical = 12.dp), // 稍微增加上下内边距让按钮更饱满
                                 colors = ButtonDefaults.buttonColors(
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
                             ) {
-                                Text("单次祈愿 (50币)")
+                                // 👈 核心：文字分层排版
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("单次祈愿", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text("50 币", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f))
+                                }
                             }
+
                             Button(
-                                onClick = {
-                                    gachaViewModel.draw(10)
-                                },
+                                onClick = { gachaViewModel.draw(10) },
                                 enabled = primaryBalance >= 500,
+                                modifier = Modifier.weight(1f), // 👈 核心：占据剩下空间的一半
+                                contentPadding = PaddingValues(vertical = 12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.secondary,
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
                             ) {
-                                Text("十连祈愿 (500币)")
+                                // 👈 核心：文字分层排版
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("十连祈愿", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text("500 币", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.8f))
+                                }
                             }
                         }
                     }
@@ -211,11 +220,7 @@ fun WishCard(
             Button(
                 onClick = {
                     scope.launch {
-                        if (viewModel.purchaseWish(wish)) {
-                            snackbarHostState.showSnackbar("兑换成功！")
-                        } else {
-                            snackbarHostState.showSnackbar("兑换失败，货币不足或网络错误")
-                        }
+                       viewModel.purchaseWish(wish)
                     }
                 },
                 enabled = !isSoldOut,

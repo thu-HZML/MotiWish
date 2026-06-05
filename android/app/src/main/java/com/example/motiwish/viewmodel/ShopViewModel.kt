@@ -10,6 +10,8 @@ import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.WishRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import retrofit2.HttpException
 
 class ShopViewModel(
     private val currencyRepository: CurrencyRepository,
@@ -107,8 +109,39 @@ class ShopViewModel(
                 _uiMessage.emit("兑换失败: ${response.message}")
                 return false
             }
+        } catch (e: HttpException) {
+            // ✅ 专门拦截 HTTP 400 等后端主动报的错误
+            var errorMsg = "余额不足或商品无法兑换"
+            try {
+                val errorBody = e.response()?.errorBody()?.string()
+                if (!errorBody.isNullOrBlank()) {
+                    val json = JSONObject(errorBody)
+                    // 根据你后端的常见返回格式提取文字
+                    when {
+                        json.has("detail") -> errorMsg = json.getString("detail")
+                        json.has("error") -> errorMsg = json.getString("error")
+                        json.has("message") -> errorMsg = json.getString("message")
+                        json.has("non_field_errors") -> errorMsg = json.getJSONArray("non_field_errors").getString(0)
+                    }
+                }
+            } catch (ex: Exception) {
+                // 解析失败就用默认文案
+            }
+
+            // 清理掉可能存在的括号或多余符号（像我们之前做的那样）
+            val cleanMsg = errorMsg
+                .replace(Regex("[\\[\\]{}()\"']"), "") // 砍掉各种括号引号
+                .replace("。", "")                    // 砍掉句号
+                .replace("secondary", "")              // 👈 核心修改：抹除 "secondary"
+                .replace("primary", "")                // 👈 顺手也把一级货币的 "primary" 抹除，防患于未然
+                .trim()                                // 去掉首尾多余空格
+
+            _uiMessage.emit("兑换失败: $cleanMsg")
+
+            return false
         } catch (e: Exception) {
-            _uiMessage.emit("网络异常，兑换失败")
+            // 真正的网络断开、超时等异常才会走到这里
+            _uiMessage.emit("网络异常，请检查网络连接")
             return false
         }
     }

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+import retrofit2.HttpException
 
 import com.example.motiwish.data.network.TokenManager
 
@@ -75,11 +77,12 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
                     TokenManager.saveToken(response.data.access)
                     _authEvent.emit(AuthEvent.NavigateToMain)
                 } else {
-                    _authEvent.emit(AuthEvent.ShowError(response.message ?: "登录失败"))
+                    _authEvent.emit(AuthEvent.ShowError(cleanUpErrorMsg(response.message)))
                 }
             } catch (e: Exception) {
                 // 处理网络异常
-                _authEvent.emit(AuthEvent.ShowError("网络错误: ${e.message}"))
+                val readableErrorMsg = parseErrorMessage(e)
+                _authEvent.emit(AuthEvent.ShowError(cleanUpErrorMsg(readableErrorMsg)))
             } finally {
                 _isLoading.value = false
             }
@@ -108,14 +111,61 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
                     TokenManager.saveToken(response.data.access)
                     _authEvent.emit(AuthEvent.NavigateToMain)
                 } else {
-                    _authEvent.emit(AuthEvent.ShowError(response.message ?: "注册失败"))
+                    _authEvent.emit(AuthEvent.ShowError(cleanUpErrorMsg(response.message)))
                 }
             } catch (e: Exception) {
-                _authEvent.emit(AuthEvent.ShowError("网络错误: ${e.message}"))
+                val readableErrorMsg = parseErrorMessage(e)
+                _authEvent.emit(AuthEvent.ShowError(cleanUpErrorMsg(readableErrorMsg)))
             } finally {
                 _isLoading.value = false
             }
         }
+    }
+
+    // 解析后端返回的 JSON 错误信息
+    private fun parseErrorMessage(e: Exception): String {
+        if (e is HttpException) {
+            try {
+                // 读取 400 报错时附带的 Body 内容
+                val errorBody = e.response()?.errorBody()?.string()
+                if (!errorBody.isNullOrBlank()) {
+                    val json = JSONObject(errorBody)
+                    // 匹配 Django DRF 常见的几种报错字段格式
+                    val rawMessage = when {
+                        json.has("detail") -> json.getString("detail")
+                        json.has("non_field_errors") -> json.getJSONArray("non_field_errors").getString(0)
+                        json.has("error") -> json.getString("error")
+                        json.has("message") -> json.getString("message")
+                        json.has("username") -> "用户名无效: " + json.getJSONArray("username").getString(0)
+                        json.has("password") -> "密码无效: " + json.getJSONArray("password").getString(0)
+                        else -> "输入的信息有误，请检查"
+                    }
+
+                    // ✅ 核心修改：使用正则表达式替换掉所有的方括号和双引号，只保留纯文字
+                    return rawMessage.replace(Regex("[\\[\\]\"]"), "").trim()
+                }
+            } catch (ex: Exception) {
+                return "请求失败 (HTTP ${e.code()})"
+            }
+        }
+        return "网络开小差了，请检查网络"
+    }
+
+    private fun cleanUpErrorMsg(rawMsg: String?): String {
+        if (rawMsg.isNullOrBlank()) return "登录失败"
+        return rawMsg
+            .replace(Regex("[\\[\\]{}()\"']"), "")
+            // 2. 过滤掉 DRF 的英文前缀
+            .replace("non_field_errors:", "")
+            .replace("detail:", "")
+            // 3. 翻译字段
+            .replace("username:", "用户名:")
+            .replace("password:", "密码:")
+            // 4. 去掉结尾的句号（包括中文和英文句号）
+            .replace("。", "")
+            .replace(".", "")
+            // 5. 去除首尾多余空格
+            .trim()
     }
 
     sealed class AuthEvent {
