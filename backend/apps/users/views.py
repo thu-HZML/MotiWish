@@ -1,4 +1,5 @@
 from drf_spectacular.utils import OpenApiExample, extend_schema
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -17,6 +18,15 @@ from apps.users.serializers import (
     ReminderAckSerializer,
     StableProfileSerializer,
     UserSerializer,
+)
+
+
+RegisterValidationErrorResponseSerializer = api_envelope_serializer(
+    "RegisterValidationErrorResponse",
+    serializers.DictField(
+        child=serializers.ListField(child=serializers.CharField()),
+        help_text="字段级错误信息。键为字段名，值为该字段的错误提示列表。",
+    ),
 )
 
 
@@ -214,9 +224,15 @@ class RegisterView(APIView):
     @extend_schema(
         tags=["Users"],
         summary="用户注册",
-        description="注册完成后会直接返回 JWT 令牌和用户基础资料。前端通常应在注册成功后立即进入基础资料完善流程。",
+        description=(
+            "注册完成后会直接返回 JWT 令牌和用户基础资料。前端通常应在注册成功后立即进入基础资料完善流程。"
+            "用户名、邮箱、密码、确认密码中的空白字符会被服务端忽略，不作为有效输入字符。"
+        ),
         request=RegisterSerializer,
-        responses=api_envelope_serializer("RegisterResponse", JWTTokenSerializer()),
+        responses={
+            200: api_envelope_serializer("RegisterResponse", JWTTokenSerializer()),
+            400: RegisterValidationErrorResponseSerializer,
+        },
         examples=[
             OpenApiExample(
                 "最小注册请求",
@@ -224,6 +240,7 @@ class RegisterView(APIView):
                     "username": "alice",
                     "email": "alice@example.com",
                     "password": "Password123",
+                    "password_confirm": "Password123",
                 },
                 request_only=True,
             ),
@@ -233,6 +250,7 @@ class RegisterView(APIView):
                     "username": "alice",
                     "email": "alice@example.com",
                     "password": "Password123",
+                    "password_confirm": "Password123",
                     "nickname": "爱丽丝",
                     "gender": "female",
                     "occupation": "student",
@@ -245,11 +263,95 @@ class RegisterView(APIView):
                 },
                 request_only=True,
             ),
+            OpenApiExample(
+                "注册失败：两次密码不一致",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password_confirm": ["两次输入的密码不一致。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "注册失败：密码长度不足",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password": ["这个密码太短。密码必须包含至少 8 个字符。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "注册失败：密码全为数字",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password": ["这个密码不能全部为数字。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "注册失败：常见弱密码",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password": ["这个密码太常见。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "注册失败：密码与用户信息过于相似",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password": ["这个密码和用户名太相似。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
+            OpenApiExample(
+                "注册失败：确认密码缺失",
+                value={
+                    "success": False,
+                    "code": "VALIDATION_ERROR",
+                    "message": "注册信息校验失败",
+                    "data": {
+                        "password_confirm": ["该字段是必填项。"],
+                    },
+                },
+                response_only=True,
+                status_codes=["400"],
+            ),
         ],
     )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            return api_response(
+                data=serializer.errors,
+                message="注册信息校验失败",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
         user = serializer.save()
         StableProfile.objects.get_or_create(user=user)
         DynamicProfile.objects.get_or_create(user=user)
@@ -262,7 +364,10 @@ class LoginView(APIView):
     @extend_schema(
         tags=["Users"],
         summary="用户登录",
-        description="返回 access token、refresh token 和当前用户资料。后续受保护接口都需要在 Authorization 头中带 Bearer access_token。",
+        description=(
+            "返回 access token、refresh token 和当前用户资料。后续受保护接口都需要在 Authorization 头中带 Bearer access_token。"
+            "用户名和密码中的空白字符会被服务端忽略，不作为有效输入字符。"
+        ),
         request=LoginSerializer,
         responses=api_envelope_serializer("LoginResponse", JWTTokenSerializer()),
         examples=[
