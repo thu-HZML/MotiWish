@@ -1,9 +1,29 @@
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.users.models import DynamicProfile, StableProfile, User
+
+
+def _remove_whitespace_chars(value):
+    if isinstance(value, str):
+        return "".join(value.split())
+    return value
+
+
+class AuthWhitespaceNormalizerMixin:
+    whitespace_normalized_fields = ()
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            data = data.copy()
+            for field in self.whitespace_normalized_fields:
+                if field in data:
+                    data[field] = _remove_whitespace_chars(data[field])
+        return super().to_internal_value(data)
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -75,11 +95,16 @@ class UserSerializer(serializers.ModelSerializer):
         return obj.build_prompt_profile()
 
 
-class RegisterSerializer(serializers.ModelSerializer):
+class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSerializer):
+    whitespace_normalized_fields = ("username", "email", "password", "password_confirm")
+
     password = serializers.CharField(
         write_only=True,
-        min_length=8,
-        help_text="登录密码，至少 8 位。",
+        help_text="登录密码。当前规则：至少 8 位，不能与用户信息过于相似，不能是常见弱密码，不能全为数字；空白字符会被服务端忽略，不作为有效密码字符。",
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        help_text="确认密码，必须与 password 完全一致；空白字符会被服务端忽略。",
     )
 
     class Meta:
@@ -88,6 +113,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "password",
+            "password_confirm",
             "nickname",
             "gender",
             "occupation",
@@ -99,17 +125,43 @@ class RegisterSerializer(serializers.ModelSerializer):
             "focus_areas",
         )
 
+    def validate(self, attrs):
+        password = attrs.get("password")
+        password_confirm = attrs.get("password_confirm")
+        errors = {}
+
+        if password and password_confirm and password != password_confirm:
+            errors["password_confirm"] = ["两次输入的密码不一致。"]
+
+        if password:
+            user_attrs = {
+                key: value
+                for key, value in attrs.items()
+                if key not in {"password", "password_confirm"}
+            }
+            try:
+                validate_password(password, user=User(**user_attrs))
+            except DjangoValidationError as exc:
+                errors["password"] = list(exc.messages)
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop("password")
+        validated_data.pop("password_confirm", None)
         user = User(**validated_data)
         user.set_password(password)
         user.save()
         return user
 
 
-class LoginSerializer(serializers.Serializer):
-    username = serializers.CharField(help_text="用户名。")
-    password = serializers.CharField(write_only=True, help_text="登录密码。")
+class LoginSerializer(AuthWhitespaceNormalizerMixin, serializers.Serializer):
+    whitespace_normalized_fields = ("username", "password")
+
+    username = serializers.CharField(help_text="用户名。空白字符会被服务端忽略。")
+    password = serializers.CharField(write_only=True, help_text="登录密码。空白字符会被服务端忽略。")
 
     def validate(self, attrs):
         user = authenticate(username=attrs["username"], password=attrs["password"])
