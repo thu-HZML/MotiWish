@@ -220,11 +220,7 @@ fun WishCard(
             Button(
                 onClick = {
                     scope.launch {
-                        if (viewModel.purchaseWish(wish)) {
-                            snackbarHostState.showSnackbar("兑换成功！")
-                        } else {
-                            snackbarHostState.showSnackbar("兑换失败，货币不足或网络错误")
-                        }
+                       viewModel.purchaseWish(wish)
                     }
                 },
                 enabled = !isSoldOut,
