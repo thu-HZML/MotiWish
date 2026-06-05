@@ -130,6 +130,9 @@ class TaskPricingDraftSerializer(serializers.Serializer):
         recurrence = attrs.get("recurrence", RecurrenceType.NONE)
         settlement_track = attrs.get("settlement_track", SettlementTrack.REGULAR)
 
+        if task_type == TaskType.DAILY:
+            raise serializers.ValidationError({"task_type": "daily is reserved for daily metrics; use /api/v1/daily/evaluate/."})
+
         if attrs.get("starts_on") and attrs.get("ends_on") and attrs["starts_on"] > attrs["ends_on"]:
             raise serializers.ValidationError({"ends_on": "ends_on 不能早于 starts_on。"})
         if task_type == TaskType.ONE_TIME and recurrence != RecurrenceType.NONE:

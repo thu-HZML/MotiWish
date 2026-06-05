@@ -1,5 +1,6 @@
 package com.example.motiwish.data.network
 
+import com.example.motiwish.data.model.Wish
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Path
@@ -58,6 +59,29 @@ data class CreateShopItemRequest(
     val auto_refund_on_reject: Boolean? = null  // 可选，默认可能为 true
 )
 
+// 1. 背包中嵌套的商品详情（精确匹配后端返回的 JSON 字段）
+data class NetworkInventoryItemDetail(
+    val id: Int,
+    val title: String,  // ✅ 后端叫 title，不能叫 name
+    val category: String?,
+    val catalog_key: String?,
+    val cost_secondary: Int
+)
+
+// 2. 真正的背包条目
+data class UserInventoryItem(
+    val id: Int,
+    val quantity: Int,
+    val item: NetworkInventoryItemDetail // ✅ 使用专门的网络模型，拒绝混用
+)
+
+data class InventoryPaginatedResponse(
+    val count: Int,
+    val next: String?,
+    val previous: String?,
+    val results: List<UserInventoryItem> // 真正的数据数组包裹在这里
+)
+
 interface ShopApi {
     @GET("api/v1/shop/items/")
     suspend fun getShopItems(): ApiResponse<PaginatedShopItems>
@@ -81,6 +105,17 @@ interface ShopApi {
     suspend fun createShopItem(
         @Body request: CreateShopItemRequest
     ): ApiResponse<NetworkShopItem>   // 成功后返回创建的商品对象
+  
+    // 1. 获取背包中数量大于 0 的道具
+    @GET("api/v1/shop/inventory/")
+    suspend fun getUserInventory(): ApiResponse<InventoryPaginatedResponse>
+
+    // 2. 使用背包中的道具 (调用后端的 use 接口)
+    @POST("api/v1/shop/inventory/{id}/use/")
+    suspend fun useInventoryItem(
+        @Path("id") inventoryId: Int,
+        @Body body: Map<String, String>
+    ): ApiResponse<Any>
 }
 
 

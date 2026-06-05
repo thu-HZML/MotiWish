@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.users",
     "apps.tasks",
+    "apps.daily",
     "apps.wallet",
     "apps.gacha",
     "apps.shop",
@@ -130,7 +131,7 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "MotiWish Backend API",
-    "DESCRIPTION": "面向安卓端游戏化时间管理应用的统一后端接口。",
+    "DESCRIPTION": "面向 Android 端游戏化时间管理应用的统一后端接口。",
     "VERSION": "0.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1/",

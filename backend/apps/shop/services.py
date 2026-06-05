@@ -17,8 +17,8 @@ from apps.wallet.services import reset_primary_debt, change_balance
 
 PRICE_BOUNDS = {
     WishPriceTier.SMALL: {"min": 30, "max": 120},
-    WishPriceTier.MEDIUM: {"min": 100, "max": 350},
-    WishPriceTier.LARGE: {"min": 300, "max": 1200},
+    WishPriceTier.MEDIUM: {"min": 120, "max": 350},
+    WishPriceTier.LARGE: {"min": 350, "max": 1200},
 }
 
 

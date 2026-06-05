@@ -7,7 +7,8 @@ from django.conf import settings
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
-from apps.tasks.models import DifficultyLevel, RecurrenceType, SettlementTrack, TaskType
+from apps.tasks.models import RecurrenceType, SettlementTrack, TaskType
+from apps.tasks.pricing import estimate_difficulty_level, estimate_task_size, pricing_bounds_for_task_data
 from apps.users.models import DynamicProfile, StableProfile, User
 
 try:
@@ -50,115 +51,51 @@ def load_pricing_standard(state: TaskPricingState) -> dict[str, Any]:
 
 
 def _difficulty(task_payload: dict[str, Any]) -> str:
-    return task_payload.get("difficulty_level") or DifficultyLevel.MEDIUM
+    return estimate_difficulty_level(task_payload)
 
 
-def _difficulty_index(task_payload: dict[str, Any]) -> int:
-    return {
-        DifficultyLevel.LOW: 0,
-        DifficultyLevel.MEDIUM: 1,
-        DifficultyLevel.HIGH: 2,
-    }.get(_difficulty(task_payload), 1)
+def _task_size(task_payload: dict[str, Any]) -> str:
+    return estimate_task_size({**task_payload, "difficulty_level": _difficulty(task_payload)})
+
+
+def _pricing_rule_bounds(task_payload: dict[str, Any]) -> dict[str, Any]:
+    return pricing_bounds_for_task_data({**task_payload, "difficulty_level": _difficulty(task_payload)})
 
 
 def _base_reward(task_payload: dict[str, Any]) -> int:
-    task_type = task_payload.get("task_type") or TaskType.ONE_TIME
-    recurrence = task_payload.get("recurrence") or RecurrenceType.NONE
-    settlement_track = task_payload.get("settlement_track") or SettlementTrack.REGULAR
-    difficulty_index = _difficulty_index(task_payload)
-
-    if settlement_track == SettlementTrack.EXPLORATION:
-        minutes = int(task_payload.get("estimated_focus_minutes") or 60)
-        factor = [15, 25, 40][difficulty_index]
-        return round_5(minutes / 60 * factor)
-
-    if task_type == TaskType.DAILY or recurrence == RecurrenceType.DAILY:
-        return [20, 30, 50][difficulty_index]
-
-    if task_type == TaskType.RECURRING:
-        if recurrence == RecurrenceType.MONTHLY:
-            return [200, 300, 500][difficulty_index]
-        return [60, 100, 150][difficulty_index]
-
-    return [60, 160, 350][difficulty_index]
+    return int(_pricing_rule_bounds(task_payload)["reward_primary"]["recommended"])
 
 
 def _base_penalty(task_payload: dict[str, Any], reward: int) -> int:
-    task_type = task_payload.get("task_type") or TaskType.ONE_TIME
-    recurrence = task_payload.get("recurrence") or RecurrenceType.NONE
-    settlement_track = task_payload.get("settlement_track") or SettlementTrack.REGULAR
-    difficulty_index = _difficulty_index(task_payload)
-
-    if settlement_track == SettlementTrack.EXPLORATION:
-        return max(5, round_5(reward * 0.12))
-    if task_type == TaskType.DAILY or recurrence == RecurrenceType.DAILY:
-        return [5, 10, 15][difficulty_index]
-    if task_type == TaskType.RECURRING:
-        if recurrence == RecurrenceType.MONTHLY:
-            return [30, 45, 60][difficulty_index]
-        return [10, 20, 30][difficulty_index]
-    return [10, 30, 70][difficulty_index]
+    return int(_pricing_rule_bounds(task_payload)["penalty_primary"]["recommended"])
 
 
 def _pricing_bounds(task_payload: dict[str, Any], reward: int, penalty: int) -> dict[str, Any]:
-    task_type = task_payload.get("task_type") or TaskType.ONE_TIME
-    recurrence = task_payload.get("recurrence") or RecurrenceType.NONE
-    settlement_track = task_payload.get("settlement_track") or SettlementTrack.REGULAR
-    difficulty_index = _difficulty_index(task_payload)
-
-    if settlement_track == SettlementTrack.EXPLORATION:
-        reward_min = max(5, round_5(reward * 0.5))
-        reward_max = max(reward_min + 5, round_5(reward * 2.2))
-        penalty_min = 0
-        penalty_max = max(5, round_5(reward_max * 0.2))
-    elif task_type == TaskType.DAILY or recurrence == RecurrenceType.DAILY:
-        reward_min, reward_max = [(10, 30), (15, 60), (30, 90)][difficulty_index]
-        penalty_min, penalty_max = [(0, 10), (5, 15), (10, 25)][difficulty_index]
-    elif task_type == TaskType.RECURRING and recurrence == RecurrenceType.MONTHLY:
-        reward_min, reward_max = [(100, 350), (150, 600), (250, 900)][difficulty_index]
-        penalty_min, penalty_max = [(15, 60), (25, 90), (30, 120)][difficulty_index]
-    elif task_type == TaskType.RECURRING:
-        reward_min, reward_max = [(30, 120), (50, 200), (80, 300)][difficulty_index]
-        penalty_min, penalty_max = [(5, 25), (10, 40), (15, 60)][difficulty_index]
-    else:
-        reward_min, reward_max = [(30, 120), (80, 300), (180, 800)][difficulty_index]
-        penalty_min, penalty_max = [(0, 25), (10, 60), (25, 120)][difficulty_index]
-
-    reward_min = min(reward_min, reward)
-    reward_max = max(reward_max, reward)
-    penalty_min = min(penalty_min, penalty)
-    penalty_max = min(max(penalty_max, penalty), reward_max)
+    bounds = _pricing_rule_bounds(task_payload)
     return {
-        "reward_primary": {
-            "min": reward_min,
-            "max": reward_max,
-            "recommended": reward,
-        },
-        "penalty_primary": {
-            "min": penalty_min,
-            "max": penalty_max,
-            "recommended": penalty,
-        },
+        "reward_primary": {**bounds["reward_primary"], "recommended": reward},
+        "penalty_primary": {**bounds["penalty_primary"], "recommended": penalty},
+        "difficulty_level": bounds["difficulty_level"],
+        "task_size": bounds.get("size_level", _task_size(task_payload)),
     }
 
 
 def _apply_profile_adjustment(reward: int, penalty: int, profile: dict[str, Any]) -> tuple[int, int, list[str]]:
     notes = []
-    dynamic_available = profile.get("dynamic_profile_available")
-    if dynamic_available:
-        notes.append("检测到用户已有动态画像，建议保持惩罚温和，避免在压力波动期放大挫败。")
+    if profile.get("dynamic_profile_available"):
+        notes.append("Dynamic profile available: reduced penalty pressure by 10%.")
         penalty = round_5(penalty * 0.9)
     if profile.get("stable_profile_completed"):
-        notes.append("用户稳定画像较完整，定价可信度略高。")
+        notes.append("Stable profile is complete: confidence is higher.")
     return max(5, reward), max(0, penalty), notes
 
 
 def _feedback_direction(feedback: dict[str, Any]) -> str:
     direction = feedback.get("feedback_direction")
     text = (feedback.get("feedback_text") or "").lower()
-    if direction == "too_high" or "偏高" in text or "太高" in text:
+    if direction == "too_high" or "too high" in text or "expensive" in text:
         return "too_high"
-    if direction == "too_low" or "偏低" in text or "太低" in text:
+    if direction == "too_low" or "too low" in text or "cheap" in text:
         return "too_low"
     return "detail"
 
@@ -196,35 +133,23 @@ def _apply_feedback(
     if direction == "too_high":
         reward = _step_down(reward, reward_bounds["min"], 0.85)
         penalty = _step_down(penalty, penalty_bounds["min"], 0.85)
-        notes.append("已根据本轮反馈下调奖励与惩罚。")
+        notes.append("Adjusted downward from previous quote.")
     elif direction == "too_low":
         reward = _step_up(reward, reward_bounds["max"], 1.15)
         penalty = _step_up(penalty, penalty_bounds["max"], 1.1)
-        notes.append("已根据本轮反馈上调奖励与惩罚。")
+        notes.append("Adjusted upward from previous quote.")
     else:
-        notes.append("已记录详细反馈，本轮保持数值不变。")
+        notes.append("Kept quote close to previous round and clarified the rationale.")
 
     clamped_reward = _clamp(reward, reward_bounds["min"], reward_bounds["max"])
     clamped_penalty = _clamp(penalty, penalty_bounds["min"], penalty_bounds["max"])
     if clamped_reward != reward or clamped_penalty != penalty:
-        notes.append("本轮结果已限制在建议定价范围内。")
+        notes.append("Clamped to the documented pricing range.")
     if clamped_reward in {reward_bounds["min"], reward_bounds["max"]}:
-        notes.append("奖励已到达当前任务建议范围边界。")
+        notes.append("Reward is touching a documented boundary.")
     if clamped_penalty in {penalty_bounds["min"], penalty_bounds["max"]}:
-        notes.append("惩罚已到达当前任务建议范围边界。")
+        notes.append("Penalty is touching a documented boundary.")
     return clamped_reward, clamped_penalty, notes
-
-
-def _task_type_label(value: str) -> str:
-    return dict(TaskType.choices).get(value, value)
-
-
-def _recurrence_label(value: str) -> str:
-    return dict(RecurrenceType.choices).get(value, value)
-
-
-def _difficulty_label(value: str) -> str:
-    return dict(DifficultyLevel.choices).get(value, value)
 
 
 def _build_reasoning(
@@ -237,36 +162,37 @@ def _build_reasoning(
 ) -> str:
     task_type = task_payload.get("task_type") or TaskType.ONE_TIME
     recurrence = task_payload.get("recurrence") or RecurrenceType.NONE
-    difficulty = _difficulty(task_payload)
     settlement_track = task_payload.get("settlement_track") or SettlementTrack.REGULAR
+    difficulty = _difficulty(task_payload)
+    task_size = bounds.get("task_size", _task_size(task_payload))
     parts = [
-        f"该任务按{_task_type_label(task_type)}、{_recurrence_label(recurrence)}、{_difficulty_label(difficulty)}难度估算。",
+        f"Classified as {task_size} task with {difficulty} difficulty before pricing. ",
+        f"Pricing mode: {task_type}/{recurrence}. ",
     ]
 
     if settlement_track == SettlementTrack.EXPLORATION:
         minutes = int(task_payload.get("estimated_focus_minutes") or 60)
-        parts.append(f"探索轨道按约 {minutes} 分钟专注投入折算，惩罚保持偏轻。")
+        parts.append(f"Exploration task uses focus minutes ({minutes}) and exploration cap rules. ")
     elif task_type == TaskType.ONE_TIME:
-        parts.append("一次性任务以满额完成作为奖励基准，适合配合进度结算。")
+        parts.append("One-time task uses the documented size range. ")
     elif task_type == TaskType.RECURRING:
-        parts.append("周期任务以周期完成率作为结算基准，奖励不按单次无限放大。")
+        parts.append("Recurring task uses cycle range and settlement loop rules. ")
     else:
-        parts.append("日常任务按小习惯定价，控制单日产币速度。")
+        parts.append("Daily task uses daily behavior-building range. ")
 
     if feedback_history:
         direction = _feedback_direction(feedback_history[-1])
         if direction == "too_high":
-            parts.append("本轮收到“偏高”反馈，因此在上一轮报价基础上下调。")
+            parts.append("Adjusted downward from previous quote after feedback. ")
         elif direction == "too_low":
-            parts.append("本轮收到“偏低”反馈，因此在上一轮报价基础上上调。")
+            parts.append("Adjusted upward from previous quote after feedback. ")
         else:
-            parts.append("本轮收到详细反馈，暂不改变数值但保留给后续模型参考。")
+            parts.append("Feedback was recorded without changing the pricing direction. ")
 
     parts.append(
-        "当前建议范围为奖励 "
-        f"{bounds['reward_primary']['min']}-{bounds['reward_primary']['max']}，"
-        f"惩罚 {bounds['penalty_primary']['min']}-{bounds['penalty_primary']['max']}；"
-        f"本次建议奖励 {reward}、惩罚 {penalty}。"
+        "Recommended reward "
+        f"{reward} within {bounds['reward_primary']['min']}-{bounds['reward_primary']['max']}; "
+        f"recommended penalty {penalty} within {bounds['penalty_primary']['min']}-{bounds['penalty_primary']['max']}."
     )
     return "".join(parts)
 
@@ -301,25 +227,24 @@ def _try_llm_refine_quote(state: TaskPricingState, baseline_quote: dict[str, Any
         max_retries=int(os.getenv("AI_MAX_RETRIES", "2")),
     )
     prompt = f"""
-你是 MotiWish 的任务定价助手。请基于全局定价标准、用户画像、任务草稿、用户反馈和本地规则基线，输出更合适的任务定价 JSON。
+You are the MotiWish task pricing assistant. Classify task size first, respect the documented baseline range, then return JSON only.
 
-全局定价标准：
+Pricing standard:
 {state.get("pricing_standard", "")}
 
-用户画像：
+User profile:
 {json.dumps(state.get("profile_snapshot", {}), ensure_ascii=False)}
 
-任务草稿：
+Task payload:
 {json.dumps(state.get("task_payload", {}), ensure_ascii=False)}
 
-用户反馈历史：
+Feedback history:
 {json.dumps(state.get("feedback_history", []), ensure_ascii=False)}
 
-本地规则基线：
+Baseline quote and hard bounds:
 {json.dumps(baseline_quote, ensure_ascii=False)}
 
-只输出 JSON，字段必须包含：
-reward_primary, penalty_primary, price_tier, confidence, reasoning, risk_notes, user_fit_notes, pricing_bounds
+Return JSON with keys: reward_primary, penalty_primary, price_tier, confidence, reasoning, risk_notes, user_fit_notes, pricing_bounds.
 """
     try:
         response = llm.invoke(prompt)
@@ -343,7 +268,7 @@ reward_primary, penalty_primary, price_tier, confidence, reasoning, risk_notes, 
             **baseline_quote,
             "risk_notes": [
                 *baseline_quote.get("risk_notes", []),
-                f"真实 LLM 定价失败，已回退本地规则：{str(exc)[:80]}",
+                f"LLM refine failed, used local baseline: {str(exc)[:80]}",
             ],
         }
 
@@ -372,7 +297,7 @@ def draft_pricing_quote(state: TaskPricingState) -> dict[str, Any]:
     quote = {
         "reward_primary": reward,
         "penalty_primary": penalty,
-        "price_tier": "medium" if reward >= 100 else "small",
+        "price_tier": bounds.get("task_size", "medium"),
         "confidence": 0.72 if missing else 0.86,
         "reasoning": _build_reasoning(
             task_payload=task_payload,
@@ -381,12 +306,14 @@ def draft_pricing_quote(state: TaskPricingState) -> dict[str, Any]:
             bounds=bounds,
             feedback_history=feedback_history,
         ),
-        "risk_notes": [f"缺少字段：{', '.join(missing)}"] if missing else [],
+        "risk_notes": [f"Missing fields: {', '.join(missing)}"] if missing else [],
         "user_fit_notes": [*user_fit_notes, *feedback_notes],
         "pricing_bounds": bounds,
         "llm_style_payload": {
             "task_type": task_type,
             "settlement_track": settlement_track,
+            "difficulty_level": _difficulty(task_payload),
+            "task_size": bounds.get("task_size", _task_size(task_payload)),
             "feedback_rounds": len(feedback_history),
         },
     }
