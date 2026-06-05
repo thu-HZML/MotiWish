@@ -41,7 +41,9 @@ class ShopServiceTests(TestCase):
 
     def test_clamp_price_by_tier(self):
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.SMALL, suggested_price=10), 30)
+        self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.MEDIUM, suggested_price=100), 120)
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.MEDIUM, suggested_price=200), 200)
+        self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.LARGE, suggested_price=300), 350)
         self.assertEqual(clamp_price_by_tier(price_tier=WishPriceTier.LARGE, suggested_price=1500), 1200)
 
     def test_ensure_default_shop_items_creates_public_catalog_once(self):
@@ -176,3 +178,76 @@ class ShopItemApiTests(TestCase):
         titles = [item["title"] for item in response.data["data"]["results"]]
         self.assertIn("用户自定义愿望", titles)
         self.assertNotIn("旧版用户默认商品", titles)
+
+    def test_create_custom_wish_item_is_private_to_owner(self):
+        response = self.client.post(
+            reverse("wish-item-list"),
+            {
+                "title": "Travel reward",
+                "description": "A self-defined trip reward.",
+                "price_tier": WishPriceTier.LARGE,
+                "price_secondary": 800,
+                "rarity": "epic",
+                "inventory": 1,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        item = WishItem.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(item.owner, self.user)
+        self.assertEqual(item.category, ShopItemCategory.WISH)
+        self.assertEqual(item.catalog_key, "")
+        self.assertTrue(item.is_enabled)
+
+        list_response = self.client.get(reverse("wish-item-list"), {"category": "wish_reward"})
+        titles = [entry["title"] for entry in list_response.data["data"]["results"]]
+        self.assertIn("Travel reward", titles)
+
+        other_user = get_user_model().objects.create_user(
+            username="other_shop_user",
+            email="other-shop@example.com",
+            password="Password123!",
+        )
+        self.client.force_authenticate(other_user)
+        other_response = self.client.get(reverse("wish-item-list"), {"category": "wish_reward"})
+        other_titles = [entry["title"] for entry in other_response.data["data"]["results"]]
+        self.assertNotIn("Travel reward", other_titles)
+
+    def test_user_can_update_and_delete_only_own_custom_wish_item(self):
+        own_item = WishItem.objects.create(
+            owner=self.user,
+            title="Custom dinner reward",
+            category=ShopItemCategory.WISH,
+            price_tier=WishPriceTier.MEDIUM,
+            price_secondary=180,
+        )
+        public_item = WishItem.objects.create(
+            owner=None,
+            catalog_key="public_wish_for_test",
+            title="Public wish reward",
+            category=ShopItemCategory.WISH,
+            price_tier=WishPriceTier.MEDIUM,
+            price_secondary=200,
+        )
+
+        patch_response = self.client.patch(
+            reverse("wish-item-detail", kwargs={"pk": own_item.pk}),
+            {"price_secondary": 220},
+            format="json",
+        )
+        self.assertEqual(patch_response.status_code, 200)
+        own_item.refresh_from_db()
+        self.assertEqual(own_item.price_secondary, 220)
+
+        public_patch_response = self.client.patch(
+            reverse("wish-item-detail", kwargs={"pk": public_item.pk}),
+            {"price_secondary": 220},
+            format="json",
+        )
+        self.assertEqual(public_patch_response.status_code, 404)
+
+        delete_response = self.client.delete(reverse("wish-item-detail", kwargs={"pk": own_item.pk}))
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertFalse(WishItem.objects.filter(pk=own_item.pk).exists())
+
