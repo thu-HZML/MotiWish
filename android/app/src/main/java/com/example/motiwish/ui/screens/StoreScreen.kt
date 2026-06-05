@@ -112,26 +112,26 @@ fun StoreScreen(
                                 onClick = {
                                     gachaViewModel.draw(1)
                                 },
-                                enabled = primaryBalance >= 10,
+                                enabled = primaryBalance >= 50,
                                 colors = ButtonDefaults.buttonColors(
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
                             ) {
-                                Text("单次祈愿 (10币)")
+                                Text("单次祈愿 (50币)")
                             }
                             Button(
                                 onClick = {
                                     gachaViewModel.draw(10)
                                 },
-                                enabled = primaryBalance >= 100,
+                                enabled = primaryBalance >= 500,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.secondary,
                                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
                                     disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                                 )
                             ) {
-                                Text("十连祈愿 (100币)")
+                                Text("十连祈愿 (500币)")
                             }
                         }
                     }
