@@ -48,6 +48,17 @@ data class RedemptionActionRequest(
     val refund: Boolean = false
 )
 
+// 自建商品请求相关
+data class CreateShopItemRequest(
+    val title: String,
+    val description: String? = null,
+    val rarity: String? = null,          // "common", "rare", "epic"
+    val price_tier: String? = null,      // "small", "medium", "large"
+    val price_secondary: Int,
+    val inventory: Int? = null,
+    val auto_refund_on_reject: Boolean? = null  // 可选，默认可能为 true
+)
+
 // 1. 背包中嵌套的商品详情（精确匹配后端返回的 JSON 字段）
 data class NetworkInventoryItemDetail(
     val id: Int,
@@ -89,6 +100,12 @@ interface ShopApi {
         @Body request: RedemptionActionRequest = RedemptionActionRequest()
     ): ApiResponse<NetworkRedemptionRecord>
 
+    // 自建商品
+    @POST("api/v1/shop/items/")
+    suspend fun createShopItem(
+        @Body request: CreateShopItemRequest
+    ): ApiResponse<NetworkShopItem>   // 成功后返回创建的商品对象
+  
     // 1. 获取背包中数量大于 0 的道具
     @GET("api/v1/shop/inventory/")
     suspend fun getUserInventory(): ApiResponse<InventoryPaginatedResponse>

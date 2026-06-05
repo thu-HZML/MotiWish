@@ -4,14 +4,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.motiwish.data.model.Wish
@@ -19,16 +25,13 @@ import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.GachaViewModel
 import com.example.motiwish.viewmodel.ShopViewModel
 import kotlinx.coroutines.launch
-import androidx.compose.ui.unit.sp
-// 【新增】：导入 alpha 修饰符用于置灰
-import androidx.compose.ui.draw.alpha
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoreScreen(
     gachaViewModel: GachaViewModel,
     shopViewModel: ShopViewModel,
-    currencyViewModel: CurrencyViewModel, // 引入货币ViewModel查看余额
+    currencyViewModel: CurrencyViewModel,
     navController: NavController
 ) {
     val wishes by shopViewModel.wishes.collectAsStateWithLifecycle()
@@ -45,12 +48,8 @@ fun StoreScreen(
 
     // 监听两个 ViewModel 的消息
     LaunchedEffect(Unit) {
-        launch {
-            gachaViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) }
-        }
-        launch {
-            shopViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) }
-        }
+        launch { gachaViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) } }
+        launch { shopViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) } }
     }
 
     Scaffold(
@@ -59,7 +58,7 @@ fun StoreScreen(
             TopAppBar(
                 title = { Text("祈愿商城") },
                 actions = {
-                    IconButton(onClick = { navController.navigate("addWish?wishId=-1") }) {
+                    IconButton(onClick = { navController.navigate("addWish") }) {
                         Icon(Icons.Default.Add, contentDescription = "添加愿望")
                     }
                     IconButton(onClick = { shopViewModel.fetchRealShopItems() }) {
@@ -144,12 +143,10 @@ fun StoreScreen(
                 Text("兑换愿望", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
 
-            // --- 4. 愿望列表 ---
-            // 按库存是否为 0 排序（售罄的排在最后面）
+            // --- 4. 愿望列表（售罄排最后）---
             val sortedWishes = wishes.sortedBy { it.inventory == 0 }
-
             items(sortedWishes) { wish ->
-                WishCard(wish, shopViewModel, snackbarHostState, navController)
+                WishCard(wish, shopViewModel, snackbarHostState)
             }
         }
     }
@@ -171,19 +168,15 @@ fun BalanceBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, name: St
 fun WishCard(
     wish: Wish,
     viewModel: ShopViewModel,
-    snackbarHostState: SnackbarHostState,
-    navController: NavController
+    snackbarHostState: SnackbarHostState
 ) {
     val scope = rememberCoroutineScope()
-
-    // 判断是否售罄
     val isSoldOut = wish.inventory != null && wish.inventory == 0
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (isSoldOut) 0.5f else 1f) // 售罄置灰
-            .clickable(enabled = !isSoldOut) { navController.navigate("addWish?wishId=${wish.id}") }, // 售罄不可点进详情
+            .alpha(if (isSoldOut) 0.5f else 1f),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
@@ -196,7 +189,6 @@ fun WishCard(
             Column {
                 Text(wish.name, style = MaterialTheme.typography.titleMedium)
                 Text("需要: ${wish.costSecondary} 二级货币", style = MaterialTheme.typography.bodySmall)
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (wish.isSystem) {
                         Text(
@@ -205,8 +197,6 @@ fun WishCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-
-                    // 如果库存大于 0，展示剩余库存
                     if (wish.inventory != null && wish.inventory > 0) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -228,10 +218,10 @@ fun WishCard(
                         }
                     }
                 },
-                enabled = !isSoldOut, // 售罄禁用按钮
+                enabled = !isSoldOut,
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
             ) {
-                Text(if (isSoldOut) "已售罄" else "兑换") // 售罄文案变化
+                Text(if (isSoldOut) "已售罄" else "兑换")
             }
         }
     }
@@ -239,23 +229,38 @@ fun WishCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddWishScreen(viewModel: ShopViewModel, navController: NavController, wishId: Int) {
-    val wishes by viewModel.wishes.collectAsStateWithLifecycle()
+fun AddWishScreen(
+    shopViewModel: ShopViewModel,
+    navController: NavController
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var priceSecondary by remember { mutableStateOf("") }
+    var selectedPriceTier by remember { mutableStateOf("medium") }
+    var selectedRarity by remember { mutableStateOf("common") }
+    var inventory by remember { mutableStateOf("1") }
+    var autoRefund by remember { mutableStateOf(true) }
 
-    val wish = if (wishId != -1) {
-        wishes.find { it.id == wishId }
-    } else null
-
-    var name by remember { mutableStateOf(wish?.name ?: "") }
-    var cost by remember { mutableStateOf(wish?.costSecondary ?: 50) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // 价格档位范围映射
+    val priceRange = when (selectedPriceTier) {
+        "small" -> 30..120
+        "medium" -> 120..350  // 边界值 120 同时属于 small 和 medium，这里允许重叠
+        "large" -> 350..1200
+        else -> null
+    }
+
+    // 解析价格数值
+    val priceValue = priceSecondary.toIntOrNull()
+    val isPriceValid = priceValue != null && priceValue > 0 && (priceRange == null || priceValue in priceRange)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (wishId == -1) "添加愿望" else "编辑愿望") },
+                title = { Text("创建自定义愿望商品") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -268,59 +273,115 @@ fun AddWishScreen(viewModel: ShopViewModel, navController: NavController, wishId
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedTextField(
-                value = name,
-                onValueChange = { name = it },
-                label = { Text("愿望名称") },
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("商品名称 *") },
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = cost.toString(),
-                onValueChange = { cost = it.toIntOrNull() ?: 0 },
-                label = { Text("所需二级货币") },
+                value = description,
+                onValueChange = { description = it },
+                label = { Text("描述（可选）") },
                 modifier = Modifier.fillMaxWidth()
             )
+            OutlinedTextField(
+                value = priceSecondary,
+                onValueChange = { priceSecondary = it },
+                label = { Text("所需二级货币 *") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = priceSecondary.isNotBlank() && !isPriceValid,
+                supportingText = {
+                    if (priceSecondary.isNotBlank() && !isPriceValid) {
+                        Text("价格必须在 ${priceRange?.start} - ${priceRange?.endInclusive} 之间", color = MaterialTheme.colorScheme.error)
+                    } else if (priceRange != null) {
+                        Text("${priceRange.start} - ${priceRange.endInclusive} 二级货币", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            )
+
+            Text("价格档次")
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                listOf("small" to "小额 (30-120)", "medium" to "中额 (120-350)", "large" to "大额 (350-1200)").forEach { (tier, label) ->
+                    FilterChip(
+                        selected = selectedPriceTier == tier,
+                        onClick = { selectedPriceTier = tier },
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            Text("稀有度（可选）")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("common" to "普通", "rare" to "稀有", "epic" to "珍贵").forEach { (rarity, label) ->
+                    FilterChip(
+                        selected = selectedRarity == rarity,
+                        onClick = { selectedRarity = rarity },
+                        label = { Text(label) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = inventory,
+                onValueChange = { inventory = it },
+                label = { Text("库存数量（留空则无限）") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                supportingText = { Text("正整数表示库存，0表示售罄，留空或-1表示无限") }
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("拒绝时自动退款", modifier = Modifier.weight(1f))
+                Switch(
+                    checked = autoRefund,
+                    onCheckedChange = { autoRefund = it }
+                )
+            }
 
             Button(
                 onClick = {
-                    if (name.isNotBlank() && cost > 0) {
-                        if (wishId == -1) {
-                            viewModel.addCustomWish(name, cost)
-                        } else {
-                            wish?.let {
-                                val updatedWish = it.copy(name = name, costSecondary = cost)
-                                viewModel.updateWish(updatedWish)
-                            }
-                        }
-                        scope.launch {
-                            snackbarHostState.showSnackbar(if (wishId == -1) "添加成功" else "更新成功")
+                    val price = priceValue
+                    if (title.isBlank()) {
+                        scope.launch { snackbarHostState.showSnackbar("请填写商品名称") }
+                        return@Button
+                    }
+                    if (price == null || price <= 0) {
+                        scope.launch { snackbarHostState.showSnackbar("请填写有效的二级货币价格") }
+                        return@Button
+                    }
+                    if (priceRange != null && price !in priceRange) {
+                        scope.launch { snackbarHostState.showSnackbar("价格必须在 ${priceRange.start} - ${priceRange.endInclusive} 之间") }
+                        return@Button
+                    }
+                    val inv = when {
+                        inventory.isBlank() -> null
+                        else -> inventory.toIntOrNull()?.takeIf { it >= 0 }
+                    }
+                    scope.launch {
+                        val success = shopViewModel.createCustomShopItem(
+                            title = title,
+                            description = description.takeIf { it.isNotBlank() },
+                            priceSecondary = price,
+                            priceTier = selectedPriceTier,
+                            rarity = selectedRarity,
+                            inventory = inv,
+                            autoRefund = autoRefund
+                        )
+                        if (success) {
                             navController.popBackStack()
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                enabled = title.isNotBlank() && isPriceValid  // 按钮启用条件
             ) {
-                Text(if (wishId == -1) "添加" else "更新")
-            }
-
-            if (wish != null && !wish.isSystem) {
-                Button(
-                    onClick = {
-                        viewModel.deleteWish(wish)
-                        scope.launch {
-                            snackbarHostState.showSnackbar("删除成功")
-                            navController.popBackStack()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("删除愿望")
-                }
+                Text("创建商品")
             }
         }
     }
