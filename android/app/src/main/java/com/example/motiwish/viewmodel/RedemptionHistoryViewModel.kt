@@ -63,11 +63,21 @@ class RedemptionHistoryViewModel(private val shopApi: ShopApi) : ViewModel() {
         viewModelScope.launch {
             try {
                 val response = shopApi.getUserInventory()
-                if (response.success) {
-                    _inventoryList.value = response.data ?: emptyList()
+                if (response.success && response.data != null) {
+                    // ✅ 第一步：把真正的数组（results）从外壳里剥离出来
+                    val actualList = response.data.results
+
+                    // 如果你有打印日志的需求，请对 actualList 进行操作，而不是 response.data
+                    // Log.d("InventoryDebug", "背包拉取成功，数量: ${actualList.size}")
+
+                    // ✅ 第二步：把剥离出来的纯净数组赋值给 UI 状态
+                    _inventoryList.value = actualList
+                } else {
+                    _inventoryList.value = emptyList()
                 }
             } catch (e: Exception) {
                 Log.e("InventoryViewModel", "获取背包失败", e)
+                _inventoryList.value = emptyList()
             }
         }
     }
@@ -76,7 +86,7 @@ class RedemptionHistoryViewModel(private val shopApi: ShopApi) : ViewModel() {
     fun useItem(inventoryId: Int, onWalletRefreshNeeded: () -> Unit) {
         viewModelScope.launch {
             try {
-                val response = shopApi.useInventoryItem(inventoryId)
+                val response = shopApi.useInventoryItem(inventoryId, emptyMap())
                 if (response.success) {
                     _uiMessage.emit("道具使用成功！")
 

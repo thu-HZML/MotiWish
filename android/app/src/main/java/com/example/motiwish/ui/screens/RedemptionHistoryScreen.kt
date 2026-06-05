@@ -26,29 +26,28 @@ fun RedemptionHistoryScreen(
     currencyViewModel: CurrencyViewModel,
     navController: NavController
 ) {
-    // 拉取两个不同的数据源
+    // 1. 获取两边的数据源
     val records by viewModel.records.collectAsStateWithLifecycle()
     val inventoryList by viewModel.inventoryList.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-    // 0 = 我的背包 (Inventory), 1 = 兑换记录 (History)
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 监听 ViewModel 发来的消息并弹窗
+    // ✅【修改 1】：只把“待去享受”的愿望抽出来放进背包，历史记录不再过滤，直接使用 records 全集
+    val pendingWishes = records.filter { it.status == "requested" }
+
     LaunchedEffect(Unit) {
         viewModel.uiMessage.collect { message ->
             snackbarHostState.showSnackbar(message)
         }
     }
 
-    // 根据当前选中的 Tab 拉取对应的数据
     LaunchedEffect(selectedTabIndex) {
         if (selectedTabIndex == 0) {
-            viewModel.fetchInventory() // 确保 ViewModel 里有这个拉取背包的方法
+            viewModel.fetchInventory()
+            viewModel.fetchHistory()
         } else {
-            // 注意：如果你 ViewModel 里的方法名不叫 fetchRecords，请替换为你原本拉取历史的方法名
             viewModel.fetchHistory()
         }
     }
@@ -66,7 +65,6 @@ fun RedemptionHistoryScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 )
-                // 顶部 Tab 切换栏
                 TabRow(
                     selectedTabIndex = selectedTabIndex,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -79,24 +77,19 @@ fun RedemptionHistoryScreen(
                     Tab(
                         selected = selectedTabIndex == 1,
                         onClick = { selectedTabIndex = 1 },
-                        text = { Text("📜 兑换记录", fontWeight = FontWeight.Bold) }
+                        text = { Text("📜 兑换历史", fontWeight = FontWeight.Bold) }
                     )
                 }
             }
         }
     ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (isLoading) {
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (isLoading && inventoryList.isEmpty() && records.isEmpty()) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
-                // 根据 Tab 渲染不同列表
                 if (selectedTabIndex == 0) {
-                    // ==================== 背包页面 ====================
-                    if (inventoryList.isEmpty()) {
+                    // ==================== 🎒 背包页面 ====================
+                    if (inventoryList.isEmpty() && pendingWishes.isEmpty()) {
                         EmptyStateText("背包空空如也\n快去商城进货吧！")
                     } else {
                         LazyColumn(
@@ -104,23 +97,40 @@ fun RedemptionHistoryScreen(
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
+                            // 渲染 1: 真实的后端背包道具 (如还债卡)
                             items(inventoryList) { invItem ->
                                 InventoryItemCard(
-                                    invItem = invItem,
+                                    title = invItem.item.title,
+                                    subtitle = "拥有数量: ${invItem.quantity}",
+                                    buttonText = "立即使用",
+                                    buttonColor = MaterialTheme.colorScheme.secondary,
                                     onUseClick = {
                                         viewModel.useItem(invItem.id) {
-                                            // 道具使用成功后，立刻通知货币系统去后端刷新最新余额（清空负债）！
                                             currencyViewModel.refreshWallet()
                                         }
+                                    }
+                                )
+                            }
+
+                            // 渲染 2: 待兑现的愿望 (伪装成背包里的消费品)
+                            items(pendingWishes) { wishRecord ->
+                                InventoryItemCard(
+                                    title = wishRecord.item.title,
+                                    subtitle = "愿望券 x 1",
+                                    buttonText = "去享受！",
+                                    buttonColor = MaterialTheme.colorScheme.primary,
+                                    onUseClick = {
+                                        viewModel.fulfillRecord(wishRecord.id)
                                     }
                                 )
                             }
                         }
                     }
                 } else {
-                    // ==================== 历史/愿望页面 ====================
+                    // ==================== 📜 历史/账单页面 ====================
+                    // ✅【修改 2】：直接展示无过滤的完整 records 记录
                     if (records.isEmpty()) {
-                        EmptyStateText("暂无兑换记录\n快去商城看看有什么好东西吧！")
+                        EmptyStateText("暂无历史记录")
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -128,10 +138,8 @@ fun RedemptionHistoryScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(records) { record ->
-                                RedemptionRecordCard(
-                                    record = record,
-                                    onFulfillClick = { viewModel.fulfillRecord(record.id) }
-                                )
+                                // ✅ 现在的历史卡片纯展示，不需要传 onFulfillClick 回调了
+                                RedemptionRecordCard(record = record)
                             }
                         }
                     }
@@ -141,7 +149,6 @@ fun RedemptionHistoryScreen(
     }
 }
 
-// 提取的空状态组件，保持代码整洁
 @Composable
 fun BoxScope.EmptyStateText(text: String) {
     Text(
@@ -152,10 +159,13 @@ fun BoxScope.EmptyStateText(text: String) {
     )
 }
 
-// ==================== 1. 真实的背包道具卡片 (新增) ====================
+// 统一样式的背包卡片 (可同时兼容系统道具和愿望券)
 @Composable
 fun InventoryItemCard(
-    invItem: com.example.motiwish.data.network.UserInventoryItem, // 请确保你在数据模型里加了这个类
+    title: String,
+    subtitle: String,
+    buttonText: String,
+    buttonColor: Color,
     onUseClick: () -> Unit
 ) {
     Card(
@@ -169,15 +179,10 @@ fun InventoryItemCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // invItem.item 是嵌套的商品详情
-                Text(
-                    text = invItem.item.name, // 直接改成这样！
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(text = title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "拥有数量: ${invItem.quantity}",
+                    text = subtitle,
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
@@ -185,32 +190,24 @@ fun InventoryItemCard(
             }
             Button(
                 onClick = onUseClick,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor)
             ) {
-                Text("立即使用")
+                Text(buttonText)
             }
         }
     }
 }
 
-// ==================== 2. 兑换记录/愿望卡片 (保留原有) ====================
+// ✅【修改 3】：兑换历史账单卡片，去掉了交互按钮，变成纯展示组件
 @Composable
 fun RedemptionRecordCard(
-    record: com.example.motiwish.data.network.NetworkRedemptionRecord,
-    onFulfillClick: () -> Unit
+    record: com.example.motiwish.data.network.NetworkRedemptionRecord
 ) {
     val formattedTime = try {
         java.time.ZonedDateTime.parse(record.created_at)
             .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
     } catch (e: Exception) {
         "未知时间"
-    }
-
-    val (statusText, statusColor) = when (record.status) {
-        "completed", "fulfilled" -> Pair("已享受 🎉", Color(0xFF388E3C))
-        "requested" -> Pair("待去享受", Color(0xFFF57C00))
-        "rejected" -> Pair("已退回", Color(0xFFD32F2F))
-        else -> Pair("未知状态", Color.Gray)
     }
 
     Card(
@@ -236,18 +233,7 @@ fun RedemptionRecordCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.secondary
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = statusText, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = statusColor)
-                }
-            }
-
-            if (record.status == "requested") {
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedButton(
-                    onClick = onFulfillClick,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("我已在现实中享受该愿望！")
+                    // 状态展示的代码已经从这里彻底移除，干净利落！
                 }
             }
         }
