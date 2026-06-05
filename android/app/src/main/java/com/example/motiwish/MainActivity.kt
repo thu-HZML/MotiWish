@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
 
         val shopViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                return ShopViewModel(wishRepository, currencyRepository, shopApi) as T // <--- 【修改这行】
+                return ShopViewModel(currencyRepository, shopApi) as T // <--- 【修改这行】
             }
         })[ShopViewModel::class.java]
 
@@ -333,12 +333,11 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            composable(
-                                "addWish?wishId={wishId}",
-                                arguments = listOf(navArgument("wishId") { defaultValue = -1 })
-                            ) { backStackEntry ->
-                                val wishId = backStackEntry.arguments?.getInt("wishId") ?: -1
-                                AddWishScreen(shopViewModel, navController, wishId)
+                            composable("addWish") {
+                                AddWishScreen(
+                                    shopViewModel = shopViewModel,
+                                    navController = navController
+                                )
                             }
 
                             composable("addTask") {

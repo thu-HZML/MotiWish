@@ -47,6 +47,17 @@ data class RedemptionActionRequest(
     val refund: Boolean = false
 )
 
+// 自建商品请求相关
+data class CreateShopItemRequest(
+    val title: String,
+    val description: String? = null,
+    val rarity: String? = null,          // "common", "rare", "epic"
+    val price_tier: String? = null,      // "small", "medium", "large"
+    val price_secondary: Int,
+    val inventory: Int? = null,
+    val auto_refund_on_reject: Boolean? = null  // 可选，默认可能为 true
+)
+
 interface ShopApi {
     @GET("api/v1/shop/items/")
     suspend fun getShopItems(): ApiResponse<PaginatedShopItems>
@@ -64,6 +75,12 @@ interface ShopApi {
         @Path("id") recordId: Int,
         @Body request: RedemptionActionRequest = RedemptionActionRequest()
     ): ApiResponse<NetworkRedemptionRecord>
+
+    // 自建商品
+    @POST("api/v1/shop/items/")
+    suspend fun createShopItem(
+        @Body request: CreateShopItemRequest
+    ): ApiResponse<NetworkShopItem>   // 成功后返回创建的商品对象
 }
 
 

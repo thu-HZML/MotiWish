@@ -61,7 +61,7 @@ fun ShopScreen(viewModel: ShopViewModel, navController: NavController) {
             }
 
             items(wishes) { wish ->
-                WishCard(wish, viewModel, snackbarHostState, navController)
+                WishCard(wish, viewModel, snackbarHostState)
             }
         }
     }
