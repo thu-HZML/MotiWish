@@ -50,7 +50,9 @@ import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.X509TrustManager
-import com.example.motiwish.BuildConfig
+
+// 日志拦截器
+//import okhttp3.logging.HttpLoggingInterceptor
 
 import coil.ImageLoader
 import coil.Coil
@@ -109,6 +111,11 @@ class MainActivity : ComponentActivity() {
             .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()*/
+
+        // 日志拦截器
+        //val loggingInterceptor = HttpLoggingInterceptor().apply {
+        //    level = HttpLoggingInterceptor.Level.BODY   // 打印完整的请求/响应体
+        //}
 
         // 忽略证书验证
         val authInterceptor = AuthInterceptor()
@@ -205,6 +212,8 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+
+                // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
                 // 在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
@@ -222,13 +231,20 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
+                // 控制底部栏是否显示：非启动页且不是专注计时界面时显示
+                val showBottomBar by remember(currentRoute) {
+                    derivedStateOf {
+                        currentRoute != null && currentRoute != "splash" && !currentRoute.startsWith("focusTimer")
+                    }
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
                         bottomBar = {
-                            if (currentRoute != "splash") {
+                            if (showBottomBar) {
                                 NavigationBar(
                                     containerColor = Color.White,
                                     tonalElevation = 0.dp

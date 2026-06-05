@@ -47,6 +47,7 @@ data class OneShotTask(
     val name: String,
     val description: String,
     val deadline: LocalDateTime,
+    var progressTarget: Int = 0,                    // 用于普通任务的进度目标，探索任务复用为预计专注分钟数
     var progress: Int = 0,                          // 用于普通任务的进度百分比，探索任务复用为已专注分钟数
     var status: String = "ACTIVE",
     var reward: Int = 0,
@@ -54,7 +55,9 @@ data class OneShotTask(
     var evaluated: Boolean = false,
     val createdDate: LocalDate = LocalDate.now(),   // 新增字段，默认值为今天
     var settlementTrack: String = "regular",        // 是否为探索任务
-    var estimatedFocusMinutes: Int? = null          // 预估探索时长
+    var estimatedFocusMinutes: Int? = null,          // 预估探索时长
+    val actualReward: Int? = null,   // 实际获得奖励
+    val actualPenalty: Int? = null   // 实际扣除惩罚
 )
 
 @Entity(tableName = "transactions")

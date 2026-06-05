@@ -3,11 +3,11 @@ package com.example.motiwish.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.motiwish.data.model.OneShotTask
-import com.example.motiwish.data.model.PeriodicTask
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.TaskRepository
+import com.example.motiwish.data.network.RemoteTask
 import com.example.motiwish.data.network.TaskOccurrence
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -19,8 +19,11 @@ data class HistoryItem(
     val date: String,
     val status: String,
     val reward: Int,
+    val penalty: Int,
     val type: String,
-    val isDeadline: Boolean = false   // 新增：是否为截止日
+    val isDeadline: Boolean = false,
+    val actualReward: Int? = null,   // 新增：实际获得货币
+    val actualPenalty: Int? = null    // 新增：实际扣除货币
 )
 
 class HistoryViewModel(
@@ -31,104 +34,169 @@ class HistoryViewModel(
     private val _historyItems = MutableStateFlow<List<HistoryItem>>(emptyList())
     val historyItems: StateFlow<List<HistoryItem>> = _historyItems
 
-    // 存储已完成的任务实例（从云端获取，用于标记状态）
-    private val _completedOccurrences = MutableStateFlow<Set<String>>(emptySet()) // key: "taskId_date"
-
-    init {
-        loadTaskTemplates()
-        loadCompletedOccurrences() // 从云端获取已完成实例
-    }
-
-    private fun loadTaskTemplates() {
+    private fun loadHistory() {
         viewModelScope.launch {
-            combine(
-                taskRepository.getAllActivePeriodicTasks(),
-                taskRepository.getAllOneShotTasks()
-            ) { periodicTasks, oneShotTasks ->
-                generateHistoryItems(periodicTasks, oneShotTasks)
-            }.collect { items ->
+            try {
+                // 并行获取任务模板和已完成实例
+                val tasksDeferred = async { taskRepository.fetchAllActiveTasksFromCloud() }
+                val occurrencesDeferred = async { taskRepository.getTaskHistory() }
+                val allTasks = tasksDeferred.await()
+                val allOccurrences = occurrencesDeferred.await()
+
+                // 构建已完成实例的快速查找 Map: "taskId_date" -> TaskOccurrence
+                val occurrenceMap = allOccurrences.associateBy { "${it.task.id}_${it.occurrence_date}" }
+
+                val items = generateHistoryItems(allTasks, occurrenceMap)
                 _historyItems.value = items
+                Log.d("HistoryVM", "Loaded ${items.size} history items from cloud")
+            } catch (e: Exception) {
+                Log.e("HistoryVM", "Failed to load history", e)
+                _historyItems.value = emptyList()
             }
         }
     }
 
-    private fun loadCompletedOccurrences() {
-        viewModelScope.launch {
-            val occurrences = taskRepository.getTaskHistory() // 复用之前的历史接口，获取已完成实例
-            val completedSet = occurrences
-                .filter { it.status == "completed" }
-                .map { "${it.task.id}_${it.occurrence_date}" }
-                .toSet()
-            _completedOccurrences.value = completedSet
-        }
-    }
-
-    private fun generateHistoryItems(periodicTasks: List<PeriodicTask>, oneShotTasks: List<OneShotTask>): List<HistoryItem> {
+    /**
+     * 根据云端任务模板和已有实例生成日历项
+     * @param tasks 云端任务模板列表
+     * @param occurrenceMap 已有实例映射，key = "taskId_date"
+     */
+    private fun generateHistoryItems(
+        tasks: List<RemoteTask>,
+        occurrenceMap: Map<String, TaskOccurrence>
+    ): List<HistoryItem> {
         val items = mutableListOf<HistoryItem>()
         val today = LocalDate.now()
-        val startDate = today.minusMonths(3) // 显示最近3个月，可调整
+        val startDate = today.minusMonths(3)
         val endDate = today.plusMonths(3)
-        Log.d("HistoryVM", "periodicTasks size: ${periodicTasks.size}, oneShotTasks size: ${oneShotTasks.size}")
-        // 处理周期任务
-        periodicTasks.forEach { task ->
-            var currentDate = maxOf(startDate, task.createdDate ?: startDate) // 需要 PeriodicTask 添加 createdDate 字段，如果没有则用 startDate
-            while (currentDate <= endDate) {
-                if (shouldShowOnDate(task, currentDate)) {
-                    val isCompleted = _completedOccurrences.value.contains("${task.id}_$currentDate")
-                    items.add(HistoryItem(
-                        title = task.name,
-                        date = currentDate.toString(),
-                        status = if (isCompleted) "已完成" else "待完成",
-                        reward = if (isCompleted) task.rewardAmount else 0,
-                        type = "周期"
-                    ))
+
+        for (task in tasks) {
+            // 判断任务类型：一次性 vs 周期
+            val isOneTime = task.task_type == "one_time"
+
+            if (isOneTime) {
+                // 一次性任务：从 starts_on 或 created_at 到 due_at（含截止日）
+                val taskStartDate = parseDate(task.starts_on) ?: parseDate(task.created_at) ?: startDate
+                val dueDate = parseDate(task.due_at) ?: continue
+                val start = maxOf(startDate, taskStartDate)
+                val end = minOf(endDate, dueDate)
+                var currentDate = start
+                while (currentDate <= end) {
+                    val key = "${task.id}_$currentDate"
+                    val occurrence = occurrenceMap[key]
+                    val status = occurrence?.status ?: "pending"
+                    val isCompleted = status == "completed"
+                    val isDeadline = currentDate == dueDate
+                    val actualReward = occurrence?.settlement_details?.reward_primary   // 实际获得奖励
+                    val actualPenalty = occurrence?.settlement_details?.penalty_primary // 实际获得惩罚
+                    items.add(
+                        HistoryItem(
+                            title = task.title,
+                            date = currentDate.toString(),
+                            status = when (status) {
+                                "pending" -> "待完成"
+                                "completed" -> "已完成"
+                                "missed" -> "已错过"
+                                "cancelled" -> "已取消"
+                                else -> status
+                            },
+                            reward = if (isCompleted) task.reward_primary else 0,
+                            penalty = if (!isCompleted) task.penalty_primary else 0,
+                            type = "一次性",
+                            isDeadline = isDeadline,
+                            actualReward = actualReward,
+                            actualPenalty = actualPenalty
+                        )
+                    )
+                    currentDate = currentDate.plusDays(1)
                 }
-                currentDate = currentDate.plusDays(1)
+            } else {
+                // 周期任务：根据 recurrence 和 weekdays/month_days 判断
+                val taskStartDate = parseDate(task.starts_on) ?: parseDate(task.created_at) ?: startDate
+                var currentDate = maxOf(startDate, taskStartDate)
+                while (currentDate <= endDate) {
+                    if (shouldShowRecurringTask(task, currentDate)) {
+                        val key = "${task.id}_$currentDate"
+                        val occurrence = occurrenceMap[key]
+                        val status = occurrence?.status ?: "pending"
+                        val isCompleted = status == "completed"
+                        items.add(
+                            HistoryItem(
+                                title = task.title,
+                                date = currentDate.toString(),
+                                status = when (status) {
+                                    "pending" -> "待完成"
+                                    "completed" -> "已完成"
+                                    "missed" -> "已错过"
+                                    "cancelled" -> "已取消"
+                                    else -> status
+                                },
+                                reward = if (isCompleted) task.reward_primary else 0,
+                                penalty = if (!isCompleted) task.penalty_primary else 0,
+                                type = "周期",
+                                isDeadline = false
+                            )
+                        )
+                    }
+                    currentDate = currentDate.plusDays(1)
+                }
             }
         }
-
-        // 处理一次性任务
-        oneShotTasks.forEach { task ->
-            val start = maxOf(startDate, task.createdDate ?: startDate)
-            val end = minOf(endDate, task.deadline.toLocalDate())
-            var currentDate = start
-            while (currentDate <= end) {
-                val isCompleted = _completedOccurrences.value.contains("${task.id}_$currentDate") ||
-                        (currentDate == task.deadline.toLocalDate() && task.status == "COMPLETED")
-                val isDeadline = currentDate == task.deadline.toLocalDate()   // 标记截止日
-                items.add(HistoryItem(
-                    title = task.name,
-                    date = currentDate.toString(),
-                    status = if (isCompleted) "已完成" else "待完成",
-                    reward = if (isCompleted) task.reward else 0,
-                    type = "一次性",
-                    isDeadline = isDeadline
-                ))
-                currentDate = currentDate.plusDays(1)
-            }
-        }
-
         return items.sortedByDescending { it.date }
     }
 
-    private fun shouldShowOnDate(task: PeriodicTask, date: LocalDate): Boolean {
-        return when (task.type) {
-            "DAILY" -> true
-            "WEEKLY" -> task.dayOfWeek == date.dayOfWeek.value
-            "MONTHLY" -> task.dayOfMonth == date.dayOfMonth
+    /**
+     * 判断周期任务在指定日期是否应该出现
+     * 根据任务字段 recurrence + weekdays/month_days
+     */
+    private fun shouldShowRecurringTask(task: RemoteTask, date: LocalDate): Boolean {
+        return when (task.recurrence) {
+            "daily" -> true
+            "weekly" -> {
+                val weekdays = task.weekdays ?: return false
+                // 后端 weekdays: 0=周一 ~ 6=周日，LocalDate.dayOfWeek 周一=1 ~ 周日=7，转换到0-6
+                val todayWeekday = when (date.dayOfWeek.value) {
+                    1 -> 0   // 周一
+                    2 -> 1   // 周二
+                    3 -> 2
+                    4 -> 3
+                    5 -> 4
+                    6 -> 5
+                    7 -> 6
+                    else -> -1
+                }
+                weekdays.contains(todayWeekday)
+            }
+            "monthly" -> {
+                val monthDays = task.month_days ?: return false
+                monthDays.contains(date.dayOfMonth)
+            }
             else -> false
         }
     }
 
-    // 刷新（手动调用）
-    fun refresh() {
-        loadTaskTemplates()
-        loadCompletedOccurrences()
+    /**
+     * 解析 ISO 日期字符串（支持 "yyyy-MM-dd" 或 "yyyy-MM-ddTHH:mm:ssZ"）
+     */
+    private fun parseDate(dateStr: String?): LocalDate? {
+        if (dateStr.isNullOrEmpty()) return null
+        return try {
+            if (dateStr.length >= 10) LocalDate.parse(dateStr.substring(0, 10))
+            else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     /**
-     * 获取指定月份的任务分组数据（按日期）
-     * 此方法无需改动，因为 historyItems 已经是从云端获取的数据
+     * 手动刷新
+     */
+    fun refresh() {
+        loadHistory()
+    }
+
+    /**
+     * 获取指定月份的任务分组（按日期）
      */
     fun getTasksByMonth(yearMonth: YearMonth): Flow<Map<LocalDate, List<HistoryItem>>> {
         return historyItems.map { items ->

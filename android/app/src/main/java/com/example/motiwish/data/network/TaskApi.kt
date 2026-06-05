@@ -7,18 +7,20 @@ import java.time.LocalDateTime
 import retrofit2.Response
 
 // ---------- 请求/响应 DTO ----------
+// 任务列表分页响应（外层）
 data class TaskListResponse(
+    val success: Boolean,
+    val code: String,
+    val message: String,
+    val data: TaskListData
+)
+
+// data 中的每一项
+data class TaskListData(
     val count: Int,
     val next: String?,
     val previous: String?,
-    val results: List<TaskResultItem>
-)
-
-data class TaskResultItem(
-    val data: List<RemoteTask>,
-    val success: Boolean,
-    val code: String,
-    val message: String
+    val results: List<RemoteTask>
 )
 
 data class RemoteTask(
@@ -26,22 +28,27 @@ data class RemoteTask(
     val title: String,
     val description: String?,
     val task_type: String,          // "daily", "weekly", "monthly", "one_time", "metric"
-    val recurrence: String,
+    val recurrence: String,         // "none", "daily", "weekly", "monthly"
     val settlement_track: String,
     val difficulty_level: String?,
     val estimated_focus_minutes: Int?,
-    val weekdays: List<Int>?,
+    val weekdays: List<Int>?,       // 0=周一 ~ 6=周日
     val month_days: List<Int>?,
-    val metric_key: String?,        // 用于日常指标: "wake_up_time", "sleep_time", "phone_usage_minutes", "water_cups"
+    val metric_key: String?,
     val target_value: Int?,
     val progress_target: Int?,
     val reward_primary: Int,
     val penalty_primary: Int,
     val pricing_status: String,
-    val status: String,             // "active", "completed", "failed"
+    val pricing_requested_at: String?,
+    val pricing_resolved_at: String?,
+    val pricing_snapshot: Any?,
     val starts_on: String?,         // "YYYY-MM-DD"
     val ends_on: String?,
     val due_at: String?,            // "YYYY-MM-DDTHH:MM:SSZ"
+    val status: String,             // "active", "archived"
+    val tags: List<String>?,
+    val ai_metadata: Any?,
     val created_at: String,
     val updated_at: String
 )
@@ -122,16 +129,6 @@ data class EvaluateDailyMetricResponse(
     val message: String
 )
 
-// 周期任务完成请求
-data class CompletePeriodicTaskRequest(
-    val completed_date: LocalDate
-)
-
-// 一次性任务进度更新
-data class UpdateProgressRequest(
-    val progress: Int
-)
-
 // ---------- 历史记录相关模型 ----------
 data class TaskOccurrenceResponse(
     val data: List<TaskOccurrence>,
@@ -150,7 +147,8 @@ data class TaskOccurrence(
     val reward_transaction_id: Int?,
     val penalty_transaction_id: Int?,
     val created_at: String,
-    val updated_at: String
+    val updated_at: String,
+    val settlement_details: SettlementDetails? = null
 )
 
 data class TaskBrief(
@@ -176,6 +174,19 @@ data class TaskBrief(
     val due_at: String?,
     val created_at: String,
     val updated_at: String
+)
+
+data class SettlementDetails(
+    val settlement_track: String,
+    val formula: String,
+    val base_reward: Int,
+    val progress_ratio: Double,
+    val progress_factor: Double,
+    val time_factor: Double,
+    val reward_primary: Int,
+    val penalty_primary: Int,
+    val task_reward_primary: Int,
+    val task_penalty_primary: Int
 )
 
 // 完成任务相关
@@ -275,7 +286,7 @@ interface TaskApi {
     @GET("/api/v1/tasks/tasks/today/")
     suspend fun getTodayTasks(@Query("date") date: String? = null): TaskOccurrenceResponse
 
-    // 创建任务
+    // 创建任务（后端定价后自动创建任务，暂时用不到）
     @POST("/api/v1/tasks/tasks/")
     suspend fun createTask(@Body request: CreateTaskRequest): CreateTaskResponse
 
@@ -351,7 +362,8 @@ data class PartialUpdateTaskRequest(
     val month_days: List<Int>? = null,
     val metric_key: String? = null,
     val target_value: Int? = null,
-    val progress_target: Int? = null,    // 用于更新一次性任务的进度
+    val progress_target: Int? = null,
+    val progress: Int? = null,    // 用于更新一次性任务的进度
     val reward_primary: Int? = null,
     val penalty_primary: Int? = null,
     val starts_on: String? = null,
