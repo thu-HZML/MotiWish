@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 
 from django.core.serializers.json import DjangoJSONEncoder
 from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
@@ -16,6 +17,20 @@ from apps.ai.serializers import (
 from apps.ai.services import accept_task_pricing_session, create_task_pricing_session, revise_task_pricing_session
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
+
+
+USER_SUPPLIED_TASK_TIME_FIELDS = ("starts_on", "ends_on", "due_at")
+
+
+def _task_payload_preserving_user_time_fields(*, validated_payload, raw_payload):
+    payload = json.loads(json.dumps(validated_payload, cls=DjangoJSONEncoder))
+    if not isinstance(raw_payload, Mapping):
+        return payload
+
+    for field in USER_SUPPLIED_TASK_TIME_FIELDS:
+        if field in raw_payload and raw_payload[field] not in (None, ""):
+            payload[field] = raw_payload[field]
+    return payload
 
 
 @extend_schema_view(
@@ -152,7 +167,10 @@ class AITaskPricingSessionViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = AITaskPricingSessionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        task_payload = json.loads(json.dumps(serializer.validated_data["task_payload"], cls=DjangoJSONEncoder))
+        task_payload = _task_payload_preserving_user_time_fields(
+            validated_payload=serializer.validated_data["task_payload"],
+            raw_payload=request.data.get("task_payload"),
+        )
         session = create_task_pricing_session(user=request.user, task_payload=task_payload)
         return api_response(data=self.get_serializer(session).data, message="任务定价会话已创建")
 
