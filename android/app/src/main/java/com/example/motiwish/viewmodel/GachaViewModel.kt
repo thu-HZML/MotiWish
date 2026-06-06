@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
+
 class GachaViewModel(
     private val gachaApi: GachaApi, // 新增了 API 依赖
     private val currencyRepository: CurrencyRepository
@@ -36,16 +38,25 @@ class GachaViewModel(
                 }
 
                 val delayTime = if (times == 1) {
-                    800L  // 单抽只等 0.8 秒，干脆利落
+                    500L  // 单抽只等 0.8 秒，干脆利落
                 } else {
-                    1500L // 十连等 1.5 秒，保留期待感
+                    1200L // 十连等 1.5 秒，保留期待感
                 }
 
                 val minimumAnimationDelay = launch {
                     kotlinx.coroutines.delay(delayTime)
                 }
 
-                val response = gachaApi.draw(currentPoolId, GachaDrawRequest(times))
+                val response = withTimeoutOrNull(5000L) {
+                    gachaApi.draw(currentPoolId, GachaDrawRequest(times))
+                }
+                if (response == null) {
+                    // 如果返回 null，说明 5 秒内接口没响应，触发了超时
+                    _uiMessage.emit("网络信号微弱，祈愿超时，请稍后再试")
+                    // ⚠️ 稳妥起见：超时后主动刷新一次余额，防止其实服务端已经扣款但前端没收到响应
+                    currencyRepository.refreshWalletFromServer()
+                    return@launch
+                }
 
                 minimumAnimationDelay.join()
                 if (response.success && response.data != null) {

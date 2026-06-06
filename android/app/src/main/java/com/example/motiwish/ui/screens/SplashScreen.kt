@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.motiwish.viewmodel.AuthViewModel
+import androidx.compose.material.icons.filled.AutoAwesome
 
 @Composable
 fun SplashAuthScreen(
@@ -71,8 +72,8 @@ fun SplashAuthScreen(
                 modifier = Modifier.offset(y = if (showLoginPanel) (-180).dp else 0.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "Logo",
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "MotiWish Logo",
                     modifier = Modifier.size(80.dp),
                     tint = Color.White
                 )
