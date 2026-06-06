@@ -261,6 +261,11 @@ def accept_task_pricing_session(*, session):
             "pricing_standard_version": session.pricing_standard_version,
             "quote_payload": quote,
             "feedback_history": session.feedback_history,
+            "user_time_fields": {
+                key: session.task_payload[key]
+                for key in ("starts_on", "ends_on", "due_at")
+                if session.task_payload.get(key)
+            },
         },
         "ai_metadata": {
             **(session.task_payload.get("ai_metadata") or {}),

@@ -20,6 +20,14 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = ("id", "title", "description", "task_type", "recurrence", "settlement_track", "difficulty_level", "estimated_focus_minutes", "weekdays", "month_days", "metric_key", "target_value", "progress_target", "reward_primary", "penalty_primary", "pricing_status", "pricing_requested_at", "pricing_resolved_at", "pricing_snapshot", "starts_on", "ends_on", "due_at", "status", "tags", "ai_metadata", "created_at", "updated_at")
         read_only_fields = ("pricing_status", "pricing_requested_at", "pricing_resolved_at", "pricing_snapshot", "created_at", "updated_at")
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        user_time_fields = (instance.pricing_snapshot or {}).get("user_time_fields") or {}
+        for field in ("starts_on", "ends_on", "due_at"):
+            if user_time_fields.get(field):
+                data[field] = user_time_fields[field]
+        return data
+
     def validate(self, attrs):
         task_type = attrs.get("task_type", getattr(self.instance, "task_type", None))
         recurrence = attrs.get("recurrence", getattr(self.instance, "recurrence", "none"))
