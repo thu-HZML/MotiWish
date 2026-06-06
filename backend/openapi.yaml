@@ -332,6 +332,157 @@ paths:
               schema:
                 $ref: '#/components/schemas/AITaskPricingFeedbackResponse'
           description: ''
+  /api/v1/ai/wish-pricing-sessions/:
+    get:
+      operationId: ai_wish_pricing_sessions_list
+      summary: 获取愿望定价/刷新候选列表
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAIWishPricingSessionListResponseList'
+          description: ''
+    post:
+      operationId: ai_wish_pricing_sessions_create
+      description: 前端提交用户自定义愿望草稿后，AI 会先判断 small / medium / large 档位，再结合用户画像、近期任务和历史愿望给出精确定价。该接口只创建待确认会话，需要调用
+        confirm 接口后才会创建真正的商店商品。
+      summary: 创建手动愿望定价会话
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingSessionCreate'
+            examples:
+              手动愿望定价:
+                value:
+                  wish_payload:
+                    title: 周末去吃一顿喜欢的餐厅
+                    description: 完成本周计划后作为奖励。
+                    tags:
+                    - food
+                    - rest
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingSessionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingSessionCreate'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIWishPricingSessionCreateResponse'
+          description: ''
+  /api/v1/ai/wish-pricing-sessions/{id}/:
+    get:
+      operationId: ai_wish_pricing_sessions_retrieve
+      summary: 获取愿望定价/刷新候选详情
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI愿望定价会话.
+        required: true
+      tags:
+      - AI
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIWishPricingSessionDetailResponse'
+          description: ''
+  /api/v1/ai/wish-pricing-sessions/{id}/confirm/:
+    post:
+      operationId: ai_wish_pricing_sessions_confirm_create
+      description: accept 会创建真正的用户私有愿望商品；cancel 只取消当前候选。
+      summary: 确认或取消愿望候选
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this AI愿望定价会话.
+        required: true
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingAction'
+            examples:
+              确认创建商品:
+                value:
+                  action: accept
+              取消候选:
+                value:
+                  action: cancel
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingAction'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIWishPricingAction'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIWishPricingActionResponse'
+          description: ''
+  /api/v1/ai/wish-pricing-sessions/daily-refresh/:
+    post:
+      operationId: ai_wish_pricing_sessions_daily_refresh_create
+      description: 后端每日固定时间可调用同一逻辑生成一个待确认愿望候选。该候选结合用户画像、近期任务、历史愿望，并在提示词中允许轻微折扣以增强正反馈。同一用户同一天默认只生成一次；force=true
+        可强制重刷。
+      summary: 每日刷新愿望候选
+      tags:
+      - AI
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIWishDailyRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AIWishDailyRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AIWishDailyRefresh'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIWishDailyRefreshResponse'
+          description: ''
   /api/v1/common/health/:
     get:
       operationId: common_health_retrieve
@@ -1949,7 +2100,7 @@ components:
       properties:
         action:
           allOf:
-          - $ref: '#/components/schemas/ActionEnum'
+          - $ref: '#/components/schemas/AITaskPricingFeedbackActionEnum'
           description: |-
             accept 表示接受当前定价并创建任务；revise 表示提交反馈并重新定价。
 
@@ -1971,6 +2122,14 @@ components:
           maxLength: 1000
       required:
       - action
+    AITaskPricingFeedbackActionEnum:
+      enum:
+      - accept
+      - revise
+      type: string
+      description: |-
+        * `accept` - accept
+        * `revise` - revise
     AITaskPricingFeedbackResponse:
       type: object
       properties:
@@ -2109,14 +2268,216 @@ components:
         * `accepted` - 已接受
         * `cancelled` - 已取消
         * `failed` - 失败
-    ActionEnum:
+    AIWishDailyRefresh:
+      type: object
+      properties:
+        refresh_date:
+          type: string
+          format: date
+          nullable: true
+          description: 刷新日期，默认今天。
+        force:
+          type: boolean
+          default: false
+          description: 是否强制重新生成当天候选。
+    AIWishDailyRefreshResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIWishPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIWishPricingAction:
+      type: object
+      properties:
+        action:
+          allOf:
+          - $ref: '#/components/schemas/AIWishPricingActionActionEnum'
+          description: |-
+            accept=确认创建商品；cancel=取消候选。
+
+            * `accept` - accept
+            * `cancel` - cancel
+      required:
+      - action
+    AIWishPricingActionActionEnum:
       enum:
       - accept
-      - revise
+      - cancel
       type: string
       description: |-
         * `accept` - accept
-        * `revise` - revise
+        * `cancel` - cancel
+    AIWishPricingActionResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIWishPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIWishPricingSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        generated_item:
+          allOf:
+          - $ref: '#/components/schemas/WishItem'
+          readOnly: true
+        quote_payload:
+          allOf:
+          - $ref: '#/components/schemas/WishPricingQuotePayload'
+          readOnly: true
+          description: AI 给出的愿望价格、档位、理由和边界。
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 创建时间
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: 更新时间
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          default: manual
+        status:
+          allOf:
+          - $ref: '#/components/schemas/AIWishPricingSessionStatusEnum'
+          readOnly: true
+        refresh_date:
+          type: string
+          format: date
+          readOnly: true
+          nullable: true
+          title: 刷新日期
+        wish_payload:
+          title: 愿望草稿
+        context_snapshot:
+          readOnly: true
+          title: 上下文快照
+        profile_snapshot:
+          readOnly: true
+          title: 用户画像快照
+        pricing_standard_version:
+          type: string
+          readOnly: true
+        pricing_standard_excerpt:
+          type: string
+          readOnly: true
+          title: 定价标准摘录
+        error_message:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          readOnly: true
+      required:
+      - context_snapshot
+      - created_at
+      - error_message
+      - generated_item
+      - id
+      - owner
+      - pricing_standard_excerpt
+      - pricing_standard_version
+      - profile_snapshot
+      - quote_payload
+      - refresh_date
+      - status
+      - updated_at
+    AIWishPricingSessionCreate:
+      type: object
+      properties:
+        wish_payload:
+          allOf:
+          - $ref: '#/components/schemas/WishPricingPayload'
+          description: 待定价愿望草稿。
+      required:
+      - wish_payload
+    AIWishPricingSessionCreateResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIWishPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIWishPricingSessionDetailResponse:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/AIWishPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIWishPricingSessionListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AIWishPricingSession'
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - data
+      - message
+      - success
+    AIWishPricingSessionStatusEnum:
+      enum:
+      - waiting_confirmation
+      - accepted
+      - cancelled
+      - failed
+      type: string
+      description: |-
+        * `waiting_confirmation` - 等待确认
+        * `accepted` - 已接受
+        * `cancelled` - 已取消
+        * `failed` - 失败
     AvailableTimeLevelEnum:
       enum:
       - limited
@@ -3126,6 +3487,45 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/AITaskPricingSession'
+    PaginatedAIWishPricingSessionListResponseList:
+      type: object
+      required:
+      - success
+      - code
+      - message
+      - data
+      properties:
+        success:
+          type: boolean
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: object
+          required:
+          - count
+          - next
+          - previous
+          - results
+          properties:
+            count:
+              type: integer
+              example: 123
+            next:
+              type: string
+              nullable: true
+              format: uri
+              example: http://api.example.org/tasks/?page=2
+            previous:
+              type: string
+              nullable: true
+              format: uri
+              example: null
+            results:
+              type: array
+              items:
+                $ref: '#/components/schemas/AIWishPricingSessionListResponse'
     PaginatedGachaDrawRecordList:
       type: object
       required:
@@ -4271,6 +4671,14 @@ components:
         * `medium` - 一般
         * `high` - 高/较好
         * `undisclosed` - 暂不填写
+    SourceEnum:
+      enum:
+      - manual
+      - daily_refresh
+      type: string
+      description: |-
+        * `manual` - 用户手动愿望
+        * `daily_refresh` - 每日刷新愿望
     StableProfile:
       type: object
       properties:
@@ -5602,6 +6010,75 @@ components:
       - price_secondary
       - title
       - updated_at
+    WishPricingPayload:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 愿望标题。
+          maxLength: 120
+        description:
+          type: string
+          default: ''
+          description: 愿望说明。
+        price_tier:
+          allOf:
+          - $ref: '#/components/schemas/PriceTierEnum'
+          description: |-
+            可选。若不传，AI 会先判断 small / medium / large。
+
+            * `small` - 小型
+            * `medium` - 中型
+            * `large` - 大型
+        rarity:
+          $ref: '#/components/schemas/RarityEnum'
+        inventory:
+          type: integer
+          minimum: 1
+          default: 1
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 50
+    WishPricingQuotePayload:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        price_tier:
+          $ref: '#/components/schemas/PriceTierEnum'
+        price_secondary:
+          type: integer
+        rarity:
+          $ref: '#/components/schemas/RarityEnum'
+        inventory:
+          type: integer
+        reasoning:
+          type: string
+        risk_notes:
+          type: array
+          items:
+            type: string
+        user_fit_notes:
+          type: array
+          items:
+            type: string
+        pricing_bounds: {}
+        llm_style_payload: {}
+      required:
+      - inventory
+      - llm_style_payload
+      - price_secondary
+      - price_tier
+      - pricing_bounds
+      - rarity
+      - reasoning
+      - risk_notes
+      - title
+      - user_fit_notes
   securitySchemes:
     jwtAuth:
       type: http

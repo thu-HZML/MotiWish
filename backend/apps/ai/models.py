@@ -99,3 +99,50 @@ class AITaskPricingSession(TimeStampedModel):
         verbose_name = "AI任务定价会话"
         verbose_name_plural = "AI任务定价会话"
         ordering = ("-created_at", "-id")
+
+
+class AIWishPricingSession(TimeStampedModel):
+    class Status(models.TextChoices):
+        WAITING_CONFIRMATION = "waiting_confirmation", "等待确认"
+        ACCEPTED = "accepted", "已接受"
+        CANCELLED = "cancelled", "已取消"
+        FAILED = "failed", "失败"
+
+    class Source(models.TextChoices):
+        MANUAL = "manual", "用户手动愿望"
+        DAILY_REFRESH = "daily_refresh", "每日刷新愿望"
+
+    owner = models.ForeignKey(
+        "users.User", on_delete=models.CASCADE, related_name="ai_wish_pricing_sessions"
+    )
+    source = models.CharField(max_length=32, choices=Source.choices, default=Source.MANUAL)
+    status = models.CharField(
+        max_length=32, choices=Status.choices, default=Status.WAITING_CONFIRMATION
+    )
+    refresh_date = models.DateField(null=True, blank=True, db_index=True, verbose_name="刷新日期")
+    wish_payload = models.JSONField(default=dict, blank=True, verbose_name="愿望草稿")
+    context_snapshot = models.JSONField(default=dict, blank=True, verbose_name="上下文快照")
+    profile_snapshot = models.JSONField(default=dict, blank=True, verbose_name="用户画像快照")
+    pricing_standard_version = models.CharField(max_length=32, default="wish_pricing_v1")
+    pricing_standard_excerpt = models.TextField(blank=True, verbose_name="定价标准摘录")
+    quote_payload = models.JSONField(default=dict, blank=True, verbose_name="当前定价")
+    generated_item = models.ForeignKey(
+        "shop.WishItem",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="wish_pricing_sessions",
+    )
+    error_message = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "AI愿望定价会话"
+        verbose_name_plural = "AI愿望定价会话"
+        ordering = ("-created_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("owner", "source", "refresh_date"),
+                condition=models.Q(source="daily_refresh", refresh_date__isnull=False),
+                name="unique_daily_wish_refresh_per_user_date",
+            ),
+        ]
