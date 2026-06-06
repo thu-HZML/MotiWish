@@ -304,13 +304,15 @@ fun StoreScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    //HorizontalDivider(modifier = Modifier.weight(1f))
                     Text(
                         text = "兑换愿望",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                        modifier = Modifier.padding(vertical = 8.dp)
                     )
+
+                    HorizontalDivider(modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
 
                     // 专属愿望按钮
                     Button(onClick = { shopViewModel.fetchDailyRefreshWish() }) {

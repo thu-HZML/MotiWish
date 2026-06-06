@@ -161,7 +161,7 @@ class AuthViewModel(private val authApi: AuthApi) : ViewModel() {
                             }
                             if (errorMessages.isNotEmpty()) {
                                 // 将所有字段的错误连起来，用分号隔开
-                                return "注册失败: " + errorMessages.joinToString("; ")
+                                return "操作失败: " + errorMessages.joinToString("; ")
                             }
                         }
                     }
