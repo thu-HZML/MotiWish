@@ -40,6 +40,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.common.middleware.BusinessTimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -96,7 +97,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "zh-hans"
-TIME_ZONE = os.getenv("TIME_ZONE", "Asia/Shanghai")
+BUSINESS_TIME_ZONE = os.getenv("BUSINESS_TIME_ZONE", "Asia/Shanghai")
+TIME_ZONE = os.getenv("TIME_ZONE", BUSINESS_TIME_ZONE)
 USE_I18N = True
 USE_TZ = True
 

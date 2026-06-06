@@ -342,6 +342,39 @@ class TaskPricingAssistantApiTests(TestCase):
         task = Task.objects.get(pk=created_task["id"])
         self.assertEqual(task.pricing_snapshot["user_time_fields"]["due_at"], user_due_at)
 
+    @override_settings(TIME_ZONE="UTC", BUSINESS_TIME_ZONE="Asia/Shanghai", USE_TZ=True)
+    def test_pricing_session_returns_utc_due_at_in_business_timezone(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            create_response = self.client.post(
+                reverse("ai-task-pricing-session-list"),
+                {
+                    "task_payload": {
+                        "title": "Deadline sensitive task",
+                        "task_type": "one_time",
+                        "recurrence": "none",
+                        "settlement_track": "regular",
+                        "difficulty_level": "medium",
+                        "progress_target": 100,
+                        "due_at": "2026-05-12T15:00:00Z",
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(create_response.status_code, 200)
+        session_id = create_response.data["data"]["id"]
+        self.assertEqual(create_response.data["data"]["task_payload"]["due_at"], "2026-05-12T23:00:00+08:00")
+        self.assertEqual(AITaskPricingSession.objects.get(pk=session_id).task_payload["due_at"], "2026-05-12T23:00:00+08:00")
+
+        accept_response = self.client.post(
+            reverse("ai-task-pricing-session-feedback", kwargs={"pk": session_id}),
+            {"action": "accept"},
+            format="json",
+        )
+
+        self.assertEqual(accept_response.status_code, 200)
+        self.assertEqual(accept_response.data["data"]["created_task"]["due_at"], "2026-05-12T23:00:00+08:00")
+
     def test_create_api_validates_task_payload_shape(self):
         response = self.client.post(
             reverse("ai-task-pricing-session-list"),

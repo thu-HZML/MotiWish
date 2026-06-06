@@ -8,6 +8,7 @@ from django.db.models import Avg, Count
 from django.utils import timezone
 
 from apps.ai.models import AIAgentRun
+from apps.common.timezones import business_localdate
 from apps.daily.models import DailyMetricRecord, DailyMetricSummary, DailyRecordDetailLevel, DailySummaryWindow
 from apps.users.models import DynamicProfile, StableProfile
 from apps.wallet.models import CurrencyType, TransactionReason
@@ -264,7 +265,7 @@ def compress_daily_history(*, user, today: date) -> None:
 
 @transaction.atomic
 def evaluate_daily_metrics(*, user, record_date=None, wake_time, sleep_time, phone_minutes, water_cups):
-    record_date = record_date or timezone.localdate()
+    record_date = record_date or business_localdate()
     if phone_minutes < 0 or water_cups < 0:
         raise ValueError("daily metric values must not be negative")
 

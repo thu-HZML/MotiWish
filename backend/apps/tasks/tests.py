@@ -180,6 +180,47 @@ class TaskTimezoneApiTests(TestCase):
         task = Task.objects.get(pk=response.data["data"]["id"])
         self.assertEqual(task.pricing_snapshot["user_time_fields"]["due_at"], user_due_at)
 
+    @override_settings(TIME_ZONE="UTC", BUSINESS_TIME_ZONE="Asia/Shanghai", USE_TZ=True)
+    def test_task_create_returns_utc_due_at_in_business_timezone(self):
+        response = self.client.post(
+            reverse("task-list"),
+            {
+                "title": "utc_due_at_display",
+                "task_type": TaskType.ONE_TIME,
+                "recurrence": RecurrenceType.NONE,
+                "settlement_track": SettlementTrack.REGULAR,
+                "difficulty_level": DifficultyLevel.MEDIUM,
+                "progress_target": 100,
+                "reward_primary": 160,
+                "penalty_primary": 25,
+                "due_at": "2026-06-06T09:18:00Z",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["due_at"], "2026-06-06T17:18:00+08:00")
+
+    @override_settings(TIME_ZONE="UTC", BUSINESS_TIME_ZONE="Asia/Shanghai", USE_TZ=True)
+    def test_today_uses_business_date_for_utc_due_at_crossing_midnight(self):
+        task = Task.objects.create(
+            owner=self.user,
+            title="utc_due_at_cross_day",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            reward_primary=160,
+            penalty_primary=25,
+            progress_target=100,
+            due_at=datetime(2026, 6, 6, 16, 30, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": "2026-06-06T16:30:00Z"}},
+        )
+
+        response = self.client.get(reverse("task-today"), {"date": "2026-06-07"})
+
+        self.assertEqual(response.status_code, 200)
+        occurrence = TaskOccurrence.objects.get(task=task, occurrence_date=date(2026, 6, 7))
+        self.assertEqual(response.data["data"][0]["id"], occurrence.id)
+
     @override_settings(TIME_ZONE="UTC", USE_TZ=True)
     def test_today_marks_one_time_task_missed_after_user_supplied_due_at(self):
         user_due_at = "2026-06-06T17:18:00+08:00"
@@ -191,6 +232,7 @@ class TaskTimezoneApiTests(TestCase):
             reward_primary=160,
             penalty_primary=25,
             progress_target=100,
+            starts_on=date(2026, 6, 6),
             due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
             pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
         )

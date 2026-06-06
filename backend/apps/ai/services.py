@@ -4,6 +4,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 
+from apps.common.timezones import business_localdate
 from apps.ai.graphs.task_pricing import build_task_pricing_graph
 from apps.ai.graphs.wish_pricing import build_wish_pricing_graph
 from apps.ai.models import AITaskPricingSession, AIWishPricingSession
@@ -110,7 +111,7 @@ def create_wish_pricing_session(*, user, wish_payload, source=AIWishPricingSessi
 
 @transaction.atomic
 def generate_daily_wish_refresh(*, user, refresh_date=None, force=False):
-    refresh_date = refresh_date or timezone.localdate()
+    refresh_date = refresh_date or business_localdate()
     existing = AIWishPricingSession.objects.filter(
         owner=user,
         source=AIWishPricingSession.Source.DAILY_REFRESH,

@@ -2,6 +2,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.ai.models import AIReportJob, AITaskPricingSession, AIWishPricingSession
+from apps.common.timezones import format_business_datetime
 from apps.shop.models import ShopItemRarity, WishPriceTier
 from apps.shop.serializers import WishItemSerializer
 from apps.tasks.models import DifficultyLevel, RecurrenceType, SettlementTrack, TaskType
@@ -76,6 +77,13 @@ class AITaskPricingSessionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        task_payload = data.get("task_payload")
+        if isinstance(task_payload, dict) and task_payload.get("due_at"):
+            task_payload["due_at"] = format_business_datetime(task_payload["due_at"]) or task_payload["due_at"]
+        return data
 
 
 class TaskPricingDraftSerializer(serializers.Serializer):

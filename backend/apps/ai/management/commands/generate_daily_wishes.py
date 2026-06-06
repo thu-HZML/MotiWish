@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
+from apps.common.timezones import business_localdate
 from apps.ai.services import generate_daily_wish_refresh
 
 
@@ -14,7 +15,7 @@ class Command(BaseCommand):
         parser.add_argument("--force", action="store_true", help="Regenerate even if a candidate already exists.")
 
     def handle(self, *args, **options):
-        refresh_date = timezone.datetime.fromisoformat(options["date"]).date() if options.get("date") else timezone.localdate()
+        refresh_date = timezone.datetime.fromisoformat(options["date"]).date() if options.get("date") else business_localdate()
         users = get_user_model().objects.filter(is_active=True)
         if options.get("user_id"):
             users = users.filter(pk=options["user_id"])
