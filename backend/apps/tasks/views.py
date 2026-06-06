@@ -1,13 +1,13 @@
 from datetime import date
 
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
-from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
+from apps.common.timezones import business_localdate
 from apps.tasks.models import Task, TaskOccurrence
 from apps.tasks.serializers import (
     TaskActionSerializer,
@@ -79,7 +79,7 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="today")
     def today(self, request):
         value = request.query_params.get("date")
-        target_date = date.fromisoformat(value) if value else timezone.localdate()
+        target_date = date.fromisoformat(value) if value else business_localdate()
         sync_overdue_one_time_tasks(user=request.user)
         queryset = ensure_occurrences_for_date(request.user, target_date)
         return api_response(data=TaskOccurrenceSerializer(queryset, many=True).data, message="获取任务成功")

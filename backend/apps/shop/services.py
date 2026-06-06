@@ -1,6 +1,7 @@
 from django.db import models, transaction
 from django.utils import timezone
 
+from apps.common.timezones import business_localdate, business_timezone
 from apps.shop.catalog import DEFAULT_SHOP_ITEMS
 from apps.shop.models import (
     RedemptionRecord,
@@ -155,7 +156,7 @@ def use_inventory_item(*, user, inventory):
 
         # 计算当天的结束时刻 23:59:59 (符合“当天”有效的设计)
         from datetime import datetime, time
-        today_end = timezone.make_aware(datetime.combine(timezone.localdate(), time.max))
+        today_end = timezone.make_aware(datetime.combine(business_localdate(), time.max), business_timezone())
 
         # 创建一个持续至当天结束的 Buff 效果
         effect_record = UserActiveEffect.objects.create(

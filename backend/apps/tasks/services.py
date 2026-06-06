@@ -1,10 +1,10 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 
+from apps.common.timezones import business_localdate, parse_user_datetime
 from apps.tasks.models import (
     OccurrenceStatus,
     PricingStatus,
@@ -38,37 +38,18 @@ def _user_time_fields(task):
     return (task.pricing_snapshot or {}).get("user_time_fields") or {}
 
 
-def _date_from_user_iso(value):
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(str(value)[:10])
-    except ValueError:
-        return None
-
-
-def _datetime_from_user_iso(value):
-    if not value:
-        return None
-    parsed = parse_datetime(str(value))
-    if parsed is None:
-        return None
-    if timezone.is_naive(parsed):
-        return timezone.make_aware(parsed, timezone.get_current_timezone())
-    return parsed
-
-
 def _task_due_date(task):
     raw_due_at = _user_time_fields(task).get("due_at")
-    user_date = _date_from_user_iso(raw_due_at)
-    if user_date:
-        return user_date
-    return timezone.localdate(task.due_at) if task.due_at else None
+    if raw_due_at:
+        user_date = business_localdate(parse_user_datetime(raw_due_at))
+        if user_date:
+            return user_date
+    return business_localdate(task.due_at) if task.due_at else None
 
 
 def _task_due_at(task):
     raw_due_at = _user_time_fields(task).get("due_at")
-    return _datetime_from_user_iso(raw_due_at) or task.due_at
+    return parse_user_datetime(raw_due_at) or task.due_at
 
 
 def _one_time_task_is_overdue(task, now=None):
@@ -140,7 +121,7 @@ def _task_matches_date(task, target_date):
     if task.ends_on and target_date > task.ends_on:
         return False
     if task.task_type == TaskType.ONE_TIME:
-        available_from = task.starts_on or timezone.localdate(task.created_at)
+        available_from = task.starts_on or business_localdate(task.created_at)
         if target_date < available_from:
             return False
         due_date = _task_due_date(task)
@@ -161,7 +142,7 @@ def _task_can_settle_date(task, target_date):
     if task.starts_on and target_date < task.starts_on:
         return False
     if task.task_type == TaskType.ONE_TIME:
-        available_from = task.starts_on or timezone.localdate(task.created_at)
+        available_from = task.starts_on or business_localdate(task.created_at)
         return target_date >= available_from
     return _task_matches_date(task, target_date)
 
@@ -183,7 +164,7 @@ def ensure_occurrences_for_date(user, target_date):
 
 @transaction.atomic
 def update_task_progress(*, task, progress, target_date=None):
-    target_date = target_date or timezone.localdate()
+    target_date = target_date or business_localdate()
     if not _task_matches_date(task, target_date):
         raise ValueError("该任务在指定日期不可用，无法更新进度")
     if progress > task.progress_target:
@@ -379,7 +360,7 @@ def _period_representative_occurrence(task, target_date, occurrences):
 
 @transaction.atomic
 def settle_task_period(*, task, target_date=None):
-    target_date = target_date or timezone.localdate()
+    target_date = target_date or business_localdate()
     if task.task_type not in {TaskType.DAILY, TaskType.RECURRING} and task.recurrence == RecurrenceType.NONE:
         raise ValueError("只有日常任务或周期任务支持周期结算")
     if not _task_can_settle_date(task, target_date):
@@ -492,7 +473,7 @@ def complete_task(*, task, target_date=None, progress=None, settle_period=False)
     if settle_period:
         return settle_task_period(task=task, target_date=target_date)
 
-    target_date = target_date or timezone.localdate()
+    target_date = target_date or business_localdate()
     if not _task_can_settle_date(task, target_date):
         raise ValueError("该任务在指定日期不可用，无法结算")
 

@@ -1,8 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
-from django.utils import timezone
 
 from apps.ai.services import generate_daily_wish_refresh
+from apps.common.timezones import business_localdate
 from apps.users.models import DynamicProfile, StableProfile, User
 
 
@@ -83,7 +83,7 @@ class UserAdmin(DjangoUserAdmin):
         self._generate_daily_wishes(request, queryset, force=True)
 
     def _generate_daily_wishes(self, request, queryset, *, force):
-        refresh_date = timezone.localdate()
+        refresh_date = business_localdate()
         created_count = 0
         reused_count = 0
         failed = []

@@ -29,6 +29,7 @@ from apps.ai.services import (
 )
 from apps.common.api import ApiResponseMixin, api_response
 from apps.common.openapi import api_envelope_serializer
+from apps.common.timezones import format_business_datetime
 
 
 USER_SUPPLIED_TASK_TIME_FIELDS = ("starts_on", "ends_on", "due_at")
@@ -42,6 +43,8 @@ def _task_payload_preserving_user_time_fields(*, validated_payload, raw_payload)
     for field in USER_SUPPLIED_TASK_TIME_FIELDS:
         if field in raw_payload and raw_payload[field] not in (None, ""):
             payload[field] = raw_payload[field]
+    if payload.get("due_at"):
+        payload["due_at"] = format_business_datetime(payload["due_at"]) or payload["due_at"]
     return payload
 
 

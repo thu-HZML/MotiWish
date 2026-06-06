@@ -1,6 +1,7 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from apps.common.timezones import format_business_datetime
 from apps.tasks.models import DifficultyLevel, SettlementTrack, Task, TaskOccurrence
 from apps.tasks.pricing import DIFFICULTY_FACTORS, build_pricing_context
 
@@ -23,9 +24,12 @@ class TaskSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         user_time_fields = (instance.pricing_snapshot or {}).get("user_time_fields") or {}
-        for field in ("starts_on", "ends_on", "due_at"):
+        for field in ("starts_on", "ends_on"):
             if user_time_fields.get(field):
                 data[field] = user_time_fields[field]
+        due_at = format_business_datetime(user_time_fields.get("due_at") or instance.due_at)
+        if due_at:
+            data["due_at"] = due_at
         return data
 
     def _raw_user_time_fields(self):

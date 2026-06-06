@@ -50,6 +50,7 @@ DJANGO_CSRF_TRUSTED_ORIGINS=http://8.147.57.94,https://8.147.57.94
 DJANGO_SESSION_COOKIE_SECURE=false
 DJANGO_CSRF_COOKIE_SECURE=false
 TIME_ZONE=Asia/Shanghai
+BUSINESS_TIME_ZONE=Asia/Shanghai
 
 DB_ENGINE=django.db.backends.postgresql
 POSTGRES_DB=motiwish
