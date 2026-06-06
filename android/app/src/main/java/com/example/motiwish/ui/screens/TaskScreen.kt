@@ -730,10 +730,8 @@ fun DailyMetricCard(
                 }
 
                 // 喝水杯数
-                val waterCups = todayMetric?.waterCups ?: 0
-                val waterText = if (waterCups == 0) "" else waterCups.toString()
                 OutlinedTextField(
-                    value = waterText,
+                    value = (todayMetric?.waterCups ?: 0).toString(),
                     onValueChange = { newValue ->
                         val cups = if (newValue.isEmpty()) 0 else (newValue.toIntOrNull() ?: 0)
                         viewModel.updateDailyMetric(
@@ -899,16 +897,6 @@ fun PeriodicTaskCard(
                 TextButton(
                     onClick = {
                         showBottomSheet = false
-                        onEdit(task)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("编辑", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-                Divider()
-                TextButton(
-                    onClick = {
-                        showBottomSheet = false
                         viewModel.deletePeriodicTask(task)   // 直接删除
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -1031,16 +1019,6 @@ fun OneShotTaskCard(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                TextButton(
-                    onClick = {
-                        showBottomSheet = false
-                        onEdit(task)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("编辑", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                }
-                Divider()
                 TextButton(
                     onClick = {
                         showBottomSheet = false

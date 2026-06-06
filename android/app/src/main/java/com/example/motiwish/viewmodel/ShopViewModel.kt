@@ -4,10 +4,17 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.motiwish.data.model.Wish
+import com.example.motiwish.data.model.WishDraft
+import com.example.motiwish.data.network.ConfirmWishPricingRequest
 import com.example.motiwish.data.network.CreateShopItemRequest
+import com.example.motiwish.data.network.CreateWishPricingSessionRequest
+import com.example.motiwish.data.network.DailyRefreshRequest
 import com.example.motiwish.data.network.ShopApi // 新增
+import com.example.motiwish.data.network.WishPayload
+import com.example.motiwish.data.network.WishPricingSession
 import com.example.motiwish.data.repository.CurrencyRepository
 import com.example.motiwish.data.repository.WishRepository
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -20,6 +27,15 @@ class ShopViewModel(
 
     private val _uiMessage = MutableSharedFlow<String>()
     val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
+
+    // 愿望草稿管理
+    private val _wishDrafts = MutableStateFlow<List<WishDraft>>(emptyList())
+    val wishDrafts: StateFlow<List<WishDraft>> = _wishDrafts
+
+    private val _selectedWishDraftForPricing = MutableStateFlow<Pair<Int, WishPricingSession>?>(null)
+    val selectedWishDraftForPricing: StateFlow<Pair<Int, WishPricingSession>?> = _selectedWishDraftForPricing
+
+    private var nextWishDraftId = 1
 
     init {
         fetchRealShopItems()
@@ -110,6 +126,174 @@ class ShopViewModel(
         } catch (e: Exception) {
             _uiMessage.emit("网络异常，兑换失败")
             return false
+        }
+    }
+
+    /**
+     * 获取今日专属愿望候选（每日刷新）
+     * 如果后端返回已有会话（status = waiting_confirmation），则自动加入到草稿列表
+     */
+    fun fetchDailyRefreshWish(force: Boolean = false) {
+        viewModelScope.launch {
+            try {
+                val request = DailyRefreshRequest(force = if (force) true else null)
+                val response = shopApi.getDailyWishCandidate(request)
+
+                if (response.success && response.data.status == "waiting_confirmation") {
+                    val session = response.data
+                    // ✅ 从 quote_payload 中获取标题
+                    val title = session.quote_payload.title
+                    if (title.isNullOrBlank()) {
+                        _uiMessage.emit("获取的愿望标题为空，请稍后重试")
+                        return@launch
+                    }
+                    val exists = _wishDrafts.value.any { it.sessionId == session.id }
+                    if (!exists) {
+                        val draftId = nextWishDraftId++
+                        val draft = WishDraft(
+                            id = draftId,
+                            sessionId = session.id,
+                            title = title,
+                            description = session.quote_payload.description,
+                            tags = session.wish_payload.tags,
+                            status = "quoted",
+                            quotePayload = session.quote_payload,
+                            createdAt = System.currentTimeMillis(),
+                            isDailyRefresh = true
+                        )
+                        _wishDrafts.value = _wishDrafts.value + draft
+                        _uiMessage.emit("获取今日专属愿望成功，请确认")
+                    } else {
+                        _uiMessage.emit("今日专属愿望已在列表中")
+                    }
+                } else {
+                    _uiMessage.emit("获取失败: ${response.message}")
+                }
+            } catch (e: Exception) {
+                _uiMessage.emit("网络错误: ${e.message}")
+            }
+        }
+    }
+
+
+    // 创建愿望定价草稿（异步）
+    fun createWishDraftAsync(
+        title: String,
+        description: String?,
+        tags: List<String>? = null
+    ) {
+        val draftId = nextWishDraftId++
+        val draft = WishDraft(
+            id = draftId,
+            sessionId = null,
+            title = title,
+            description = description,
+            tags = tags,
+            status = "pricing",
+            quotePayload = null,
+            createdAt = System.currentTimeMillis()
+        )
+        _wishDrafts.value = _wishDrafts.value + draft
+
+        viewModelScope.launch {
+            try {
+                val request = CreateWishPricingSessionRequest(
+                    wish_payload = WishPayload(title, description, tags)
+                )
+                val response = shopApi.createWishPricingSession(request)
+                if (response.success && response.data.status == "waiting_confirmation") {
+                    val session = response.data
+                    _wishDrafts.value = _wishDrafts.value.map {
+                        if (it.id == draftId) {
+                            it.copy(
+                                sessionId = session.id,
+                                status = "quoted",
+                                quotePayload = session.quote_payload
+                            )
+                        } else it
+                    }
+                    _uiMessage.emit("愿望定价完成，请确认")
+                } else {
+                    _wishDrafts.value = _wishDrafts.value.filter { it.id != draftId }
+                    _uiMessage.emit("愿望定价失败: ${response.message}")
+                }
+            } catch (e: Exception) {
+                _wishDrafts.value = _wishDrafts.value.filter { it.id != draftId }
+                _uiMessage.emit("网络错误: ${e.message}")
+            }
+        }
+    }
+
+    // 显示定价对话框
+    fun showWishPricingDialog(draftId: Int) {
+        val draft = _wishDrafts.value.find { it.id == draftId }
+        if (draft?.status == "quoted" && draft.quotePayload != null && draft.sessionId != null) {
+            // 构建临时会话对象用于展示
+            val tempSession = WishPricingSession(
+                id = draft.sessionId,
+                source = "manual",
+                status = "waiting_confirmation",
+                refresh_date = null,
+                wish_payload = WishPayload(draft.title, draft.description, draft.tags),
+                quote_payload = draft.quotePayload,
+                generated_item = null,
+                created_at = "",
+                updated_at = ""
+            )
+            _selectedWishDraftForPricing.value = Pair(draftId, tempSession)
+        }
+    }
+
+    // 取消定价对话框
+    fun dismissWishPricingDialog() {
+        _selectedWishDraftForPricing.value = null
+    }
+
+    // 接受定价并创建商品（需支持每日愿望）
+    fun acceptWishPricing(draftId: Int) {
+        viewModelScope.launch {
+            val draft = _wishDrafts.value.find { it.id == draftId }
+            if (draft?.sessionId == null) {
+                _uiMessage.emit("草稿不存在")
+                dismissWishPricingDialog()
+                return@launch
+            }
+            dismissWishPricingDialog()
+            try {
+                val response = shopApi.confirmWishPricingSession(
+                    draft.sessionId,
+                    ConfirmWishPricingRequest("accept")
+                )
+                if (response.success && response.data.status == "accepted") {
+                    _wishDrafts.value = _wishDrafts.value.filter { it.id != draftId }
+                    fetchRealShopItems()
+                    _uiMessage.emit("愿望商品创建成功！")
+                } else {
+                    _uiMessage.emit("创建失败: ${response.message}")
+                }
+            } catch (e: Exception) {
+                _uiMessage.emit("网络错误: ${e.message}")
+            }
+        }
+    }
+
+    // 取消定价（同 accept 中的取消逻辑）
+    fun cancelWishPricing(draftId: Int) {
+        viewModelScope.launch {
+            val draft = _wishDrafts.value.find { it.id == draftId }
+            if (draft?.sessionId != null) {
+                try {
+                    shopApi.confirmWishPricingSession(
+                        draft.sessionId,
+                        ConfirmWishPricingRequest("cancel")
+                    )
+                } catch (e: Exception) {
+                    // 忽略网络错误，仍删除本地草稿
+                }
+            }
+            _wishDrafts.value = _wishDrafts.value.filter { it.id != draftId }
+            dismissWishPricingDialog()
+            _uiMessage.emit("已取消创建")
         }
     }
 }
