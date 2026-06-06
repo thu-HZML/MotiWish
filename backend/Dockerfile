@@ -14,8 +14,8 @@ RUN pip install --upgrade pip \
 
 COPY . .
 
-RUN sed -i 's/\r$//' /app/deploy/scripts/entrypoint.sh \
-    && chmod +x /app/deploy/scripts/entrypoint.sh
+RUN sed -i 's/\r$//' /app/deploy/scripts/*.sh \
+    && chmod +x /app/deploy/scripts/*.sh
 
 ENTRYPOINT ["/app/deploy/scripts/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]
