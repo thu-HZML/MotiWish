@@ -5,6 +5,7 @@ import com.google.gson.annotations.SerializedName
 import retrofit2.http.Body
 import retrofit2.http.POST
 
+
 // 响应包裹类
 data class ApiResponse<T>(
     val success: Boolean,
@@ -23,7 +24,8 @@ data class LoginRequest(
 data class RegisterRequest(
     val username: String,
     val email: String,
-    val password: String
+    val password: String,
+    @SerializedName("password_confirm") val passwordConfirm: String
 )
 
 // 登录成功后的 Token 数据
