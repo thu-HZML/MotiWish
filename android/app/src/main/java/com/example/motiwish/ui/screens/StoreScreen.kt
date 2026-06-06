@@ -25,6 +25,108 @@ import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.GachaViewModel
 import com.example.motiwish.viewmodel.ShopViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+
+@Composable
+fun GachaAnimationDialog(
+    resultMessage: String?,
+    onDismiss: () -> Unit
+) {
+    // 呼吸动画保持不变
+    val infiniteTransition = rememberInfiniteTransition(label = "gacha_anim")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "gacha_scale"
+    )
+
+    Dialog(
+        onDismissRequest = { if (resultMessage != null) onDismiss() },
+        // 关键1：关闭平台默认宽度限制，让我们更好地掌控尺寸
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            // 关键2：设置一个固定宽度和最小高度，防止底层 Android Window 剧烈形变导致抖动
+            modifier = Modifier
+                .width(320.dp)
+                .defaultMinSize(minHeight = 260.dp)
+        ) {
+            // 关键3：使用 AnimatedContent 替代 animateContentSize，实现丝滑的淡入淡出切换
+            AnimatedContent(
+                targetState = resultMessage,
+                transitionSpec = {
+                    // 动画配置：新界面淡入并伴随轻微放大，老界面快速淡出
+                    (fadeIn(tween(300)) + scaleIn(initialScale = 0.9f, animationSpec = tween(300))) togetherWith
+                            fadeOut(tween(150))
+                },
+                label = "gacha_state_transition",
+                contentAlignment = Alignment.Center // 保证切换时内容始终居中
+            ) { currentResult ->
+
+                Column(
+                    modifier = Modifier
+                        .padding(32.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center // 内容整体垂直居中
+                ) {
+                    if (currentResult == null) {
+                        // --- 状态1：正在祈愿中 ---
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Drawing",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .size(64.dp)
+                                .scale(scale)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text("流星划过天际，祈愿中...", style = MaterialTheme.typography.titleMedium)
+
+                    } else {
+                        // --- 状态2：展示抽卡结果 ---
+                        Icon(
+                            imageVector = Icons.Default.CardGiftcard,
+                            contentDescription = "Result",
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Text(
+                            text = currentResult,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                            Text("开心收下")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +143,9 @@ fun StoreScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    var isGachaPlaying by remember { mutableStateOf(false) }
+    var gachaResult by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         currencyViewModel.refreshWallet()
         shopViewModel.fetchRealShopItems()
@@ -48,8 +153,29 @@ fun StoreScreen(
 
     // 监听两个 ViewModel 的消息
     LaunchedEffect(Unit) {
-        launch { gachaViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) } }
+        launch {
+            gachaViewModel.uiMessage.collect { msg ->
+                // 如果正在抽卡界面，就把消息喂给弹窗，而不是用 Snackbar
+                if (isGachaPlaying) {
+                    gachaResult = msg
+                } else {
+                    snackbarHostState.showSnackbar(msg)
+                }
+            }
+        }
         launch { shopViewModel.uiMessage.collect { snackbarHostState.showSnackbar(it) } }
+    }
+    if (isGachaPlaying) {
+        GachaAnimationDialog(
+            resultMessage = gachaResult,
+            onDismiss = {
+                // 关闭弹窗，并重置状态
+                isGachaPlaying = false
+                gachaResult = null
+                // 抽完卡可以顺便刷新一下余额
+                currencyViewModel.refreshWallet()
+            }
+        )
     }
 
     Scaffold(
@@ -108,7 +234,11 @@ fun StoreScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp) // 👈 按钮中间留出 12dp 的整齐间距
                         ) {
                             Button(
-                                onClick = { gachaViewModel.draw(1) },
+                                onClick = {
+                                    isGachaPlaying = true
+                                    gachaResult = null
+                                    gachaViewModel.draw(1)
+                                },
                                 enabled = primaryBalance >= 50,
                                 modifier = Modifier.weight(1f), // 👈 核心：占据剩下空间的一半
                                 contentPadding = PaddingValues(vertical = 12.dp), // 稍微增加上下内边距让按钮更饱满
@@ -125,7 +255,11 @@ fun StoreScreen(
                             }
 
                             Button(
-                                onClick = { gachaViewModel.draw(10) },
+                                onClick = {
+                                    isGachaPlaying = true
+                                    gachaResult = null
+                                    gachaViewModel.draw(10)
+                                },
                                 enabled = primaryBalance >= 500,
                                 modifier = Modifier.weight(1f), // 👈 核心：占据剩下空间的一半
                                 contentPadding = PaddingValues(vertical = 12.dp),

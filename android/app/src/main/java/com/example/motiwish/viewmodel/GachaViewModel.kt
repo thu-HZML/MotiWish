@@ -35,8 +35,19 @@ class GachaViewModel(
                     return@launch // 注意：这里的 return 加上 @launch
                 }
 
+                val delayTime = if (times == 1) {
+                    800L  // 单抽只等 0.8 秒，干脆利落
+                } else {
+                    1500L // 十连等 1.5 秒，保留期待感
+                }
+
+                val minimumAnimationDelay = launch {
+                    kotlinx.coroutines.delay(delayTime)
+                }
+
                 val response = gachaApi.draw(currentPoolId, GachaDrawRequest(times))
 
+                minimumAnimationDelay.join()
                 if (response.success && response.data != null) {
                     val records = response.data
                     var totalEarned = 0
