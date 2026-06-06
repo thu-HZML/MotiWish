@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.motiwish.data.model.Wish
+import com.example.motiwish.data.model.WishDraft
+import com.example.motiwish.data.network.WishPricingSession
+import com.example.motiwish.data.network.toUserFitNotesString
 import com.example.motiwish.viewmodel.CurrencyViewModel
 import com.example.motiwish.viewmodel.GachaViewModel
 import com.example.motiwish.viewmodel.ShopViewModel
@@ -141,7 +144,10 @@ fun StoreScreen(
     val primaryBalance = balance?.primaryCurrency ?: 0
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+
+    // AI定价相关变量
+    val wishDrafts by shopViewModel.wishDrafts.collectAsStateWithLifecycle()
+    val selectedWishDraft by shopViewModel.selectedWishDraftForPricing.collectAsStateWithLifecycle()
 
     var isGachaPlaying by remember { mutableStateOf(false) }
     var gachaResult by remember { mutableStateOf<String?>(null) }
@@ -280,18 +286,56 @@ fun StoreScreen(
                 }
             }
 
-            // --- 3. 愿望商店标题 ---
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("兑换愿望", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            // --- 3. 定价中的愿望卡片 ---
+            // 定价中的愿望卡片
+            if (wishDrafts.isNotEmpty()) {
+                item {
+                    WishPricingDraftsCard(
+                        drafts = wishDrafts,
+                        viewModel = shopViewModel
+                    )
+                }
             }
 
-            // --- 4. 愿望列表（售罄排最后）---
+            // --- 4. 愿望商店标题 ---
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "兑换愿望",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 12.dp)
+                    )
+
+                    // 专属愿望按钮
+                    Button(onClick = { shopViewModel.fetchDailyRefreshWish() }) {
+                        Text("获取今日专属愿望")
+                    }
+                }
+            }
+
+            // --- 5. 愿望列表（售罄排最后）---
             val sortedWishes = wishes.sortedBy { it.inventory == 0 }
             items(sortedWishes) { wish ->
                 WishCard(wish, shopViewModel, snackbarHostState)
             }
         }
+    }
+
+    // 定价对话框（需要区分每日愿望展示额外信息）
+    selectedWishDraft?.let { (draftId, session) ->
+        WishPricingDialog(
+            session = session,
+            isDailyRefresh = session.source == "daily_refresh",  // 假设后端返回 source 字段
+            onAccept = { shopViewModel.acceptWishPricing(draftId) },
+            onCancel = { shopViewModel.cancelWishPricing(draftId) },
+            onDismiss = { shopViewModel.dismissWishPricingDialog() }
+        )
     }
 }
 
@@ -374,32 +418,16 @@ fun AddWishScreen(
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var priceSecondary by remember { mutableStateOf("") }
-    var selectedPriceTier by remember { mutableStateOf("medium") }
-    var selectedRarity by remember { mutableStateOf("common") }
-    var inventory by remember { mutableStateOf("1") }
-    var autoRefund by remember { mutableStateOf(true) }
+    var tagsText by remember { mutableStateOf("") }  // 逗号分隔
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-
-    // 价格档位范围映射
-    val priceRange = when (selectedPriceTier) {
-        "small" -> 30..120
-        "medium" -> 120..350  // 边界值 120 同时属于 small 和 medium，这里允许重叠
-        "large" -> 350..1200
-        else -> null
-    }
-
-    // 解析价格数值
-    val priceValue = priceSecondary.toIntOrNull()
-    val isPriceValid = priceValue != null && priceValue > 0 && (priceRange == null || priceValue in priceRange)
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("创建自定义愿望商品") },
+                title = { Text("添加愿望") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
@@ -419,108 +447,169 @@ fun AddWishScreen(
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
-                label = { Text("商品名称 *") },
+                label = { Text("愿望名称 *") },
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("描述（可选）") },
+                label = { Text("愿望描述（可选）") },
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(
-                value = priceSecondary,
-                onValueChange = { priceSecondary = it },
-                label = { Text("所需二级货币 *") },
+                value = tagsText,
+                onValueChange = { tagsText = it },
+                label = { Text("标签（可选，逗号分隔）") },
                 modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = priceSecondary.isNotBlank() && !isPriceValid,
-                supportingText = {
-                    if (priceSecondary.isNotBlank() && !isPriceValid) {
-                        Text("价格必须在 ${priceRange?.start} - ${priceRange?.endInclusive} 之间", color = MaterialTheme.colorScheme.error)
-                    } else if (priceRange != null) {
-                        Text("${priceRange.start} - ${priceRange.endInclusive} 二级货币", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
+                placeholder = { Text("例如：娱乐,美食,旅行") }
             )
-
-            Text("价格档次")
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                listOf("small" to "小额 (30-120)", "medium" to "中额 (120-350)", "large" to "大额 (350-1200)").forEach { (tier, label) ->
-                    FilterChip(
-                        selected = selectedPriceTier == tier,
-                        onClick = { selectedPriceTier = tier },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
-            Text("稀有度（可选）")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("common" to "普通", "rare" to "稀有", "epic" to "珍贵").forEach { (rarity, label) ->
-                    FilterChip(
-                        selected = selectedRarity == rarity,
-                        onClick = { selectedRarity = rarity },
-                        label = { Text(label) }
-                    )
-                }
-            }
-
-            OutlinedTextField(
-                value = inventory,
-                onValueChange = { inventory = it },
-                label = { Text("库存数量（留空则无限）") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                supportingText = { Text("正整数表示库存，0表示售罄，留空或-1表示无限") }
-            )
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("拒绝时自动退款", modifier = Modifier.weight(1f))
-                Switch(
-                    checked = autoRefund,
-                    onCheckedChange = { autoRefund = it }
-                )
-            }
 
             Button(
                 onClick = {
-                    val price = priceValue
                     if (title.isBlank()) {
-                        scope.launch { snackbarHostState.showSnackbar("请填写商品名称") }
+                        scope.launch { snackbarHostState.showSnackbar("请填写愿望名称") }
                         return@Button
                     }
-                    if (price == null || price <= 0) {
-                        scope.launch { snackbarHostState.showSnackbar("请填写有效的二级货币价格") }
-                        return@Button
-                    }
-                    if (priceRange != null && price !in priceRange) {
-                        scope.launch { snackbarHostState.showSnackbar("价格必须在 ${priceRange.start} - ${priceRange.endInclusive} 之间") }
-                        return@Button
-                    }
-                    val inv = when {
-                        inventory.isBlank() -> null
-                        else -> inventory.toIntOrNull()?.takeIf { it >= 0 }
-                    }
-                    scope.launch {
-                        val success = shopViewModel.createCustomShopItem(
-                            title = title,
-                            description = description.takeIf { it.isNotBlank() },
-                            priceSecondary = price,
-                            priceTier = selectedPriceTier,
-                            rarity = selectedRarity,
-                            inventory = inv,
-                            autoRefund = autoRefund
+                    val tags = tagsText.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                    shopViewModel.createWishDraftAsync(title, description, tags)
+                    navController.popBackStack()  // 返回商店页面
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("提交愿望，AI定价")
+            }
+        }
+    }
+}
+
+// 定价对话框组件
+@Composable
+fun WishPricingDialog(
+    session: WishPricingSession,
+    isDailyRefresh: Boolean = false,
+    onAccept: () -> Unit,
+    onCancel: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val quote = session.quote_payload
+    val fitNotes = quote.user_fit_notes.toUserFitNotesString()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(if (isDailyRefresh) "✨ 今日专属愿望 ✨" else "AI 愿望定价建议")
+        },
+        text = {
+            Column {
+                Text("愿望：${quote.title}", style = MaterialTheme.typography.titleMedium)
+                if (quote.description != null) {
+                    Text(quote.description, style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("建议价格：${quote.price_secondary} 二级货币")
+                Text("档位：${when (quote.price_tier) {
+                    "small" -> "小额 (30-120)"
+                    "medium" -> "中额 (120-350)"
+                    "large" -> "大额 (350-1200)"
+                    else -> quote.price_tier
+                }}")
+                Text("稀有度：${when (quote.rarity) {
+                    "common" -> "普通"
+                    "rare" -> "稀有"
+                    "epic" -> "珍贵"
+                    else -> quote.rarity
+                }}")
+                Text("库存：${if (quote.inventory > 0) quote.inventory else "无限"}")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("理由：${quote.reasoning}", style = MaterialTheme.typography.bodySmall)
+
+                if (!fitNotes.isNullOrEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = fitNotes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onAccept) {
+                Text(if (isDailyRefresh) "领取专属愿望" else "接受并创建")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+// 定价草稿卡片
+@Composable
+fun WishPricingDraftsCard(
+    drafts: List<WishDraft>,
+    viewModel: ShopViewModel
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "定价中的愿望",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            drafts.forEach { draft ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (draft.isDailyRefresh) "🎁 ${draft.title} (专属)" else draft.title,
+                            style = MaterialTheme.typography.bodyLarge
                         )
-                        if (success) {
-                            navController.popBackStack()
+                        if (draft.isDailyRefresh && draft.quotePayload?.user_fit_notes != null) {
+                            Text(
+                                text = draft.quotePayload.user_fit_notes.toUserFitNotesString()?.take(30) ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = title.isNotBlank() && isPriceValid  // 按钮启用条件
-            ) {
-                Text("创建商品")
+                    when (draft.status) {
+                        "pricing" -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("AI 定价中...", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        "quoted" -> {
+                            Button(
+                                onClick = { viewModel.showWishPricingDialog(draft.id) },
+                                modifier = Modifier.wrapContentWidth()
+                            ) {
+                                Text("查看定价")
+                            }
+                        }
+                        else -> {
+                            Text(draft.status, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                if (draft != drafts.last()) {
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                }
             }
         }
     }

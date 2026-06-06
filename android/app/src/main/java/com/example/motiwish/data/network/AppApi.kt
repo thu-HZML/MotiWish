@@ -82,6 +82,63 @@ data class InventoryPaginatedResponse(
     val results: List<UserInventoryItem> // 真正的数据数组包裹在这里
 )
 
+// ========== 愿望 AI 定价会话 ==========
+data class WishPayload(
+    val title: String?,        // ✅ 改为可空
+    val description: String? = null,
+    val tags: List<String>? = null
+)
+
+data class WishQuotePayload(
+    val title: String,
+    val description: String?,
+    val price_tier: String,      // "small", "medium", "large"
+    val price_secondary: Int,
+    val rarity: String,           // "common", "rare", "epic"
+    val inventory: Int,
+    val reasoning: String,
+    val pricing_bounds: PricingBounds?,
+    val user_fit_notes: Any?   // ✅ 改为 Any? 接受字符串或数组
+)
+
+data class PricingBounds(
+    val price_secondary: PriceBound,
+    val price_tier: String
+)
+
+data class PriceBound(
+    val min: Int,
+    val max: Int,
+    val recommended: Int
+)
+
+data class WishPricingSession(
+    val id: Int,
+    val source: String,           // "manual" or "daily_refresh"
+    val status: String,           // "waiting_confirmation", "accepted", "cancelled", "failed"
+    val refresh_date: String?,
+    val wish_payload: WishPayload,
+    val quote_payload: WishQuotePayload,
+    val generated_item: NetworkShopItem?,
+    val created_at: String,
+    val updated_at: String
+)
+
+data class CreateWishPricingSessionRequest(
+    val wish_payload: WishPayload
+)
+
+data class ConfirmWishPricingRequest(
+    val action: String            // "accept" or "cancel"
+)
+
+data class WishPricingSessionResponse(
+    val data: WishPricingSession,
+    val success: Boolean,
+    val code: String,
+    val message: String
+)
+
 interface ShopApi {
     @GET("api/v1/shop/items/")
     suspend fun getShopItems(): ApiResponse<PaginatedShopItems>
@@ -116,6 +173,33 @@ interface ShopApi {
         @Path("id") inventoryId: Int,
         @Body body: Map<String, String>
     ): ApiResponse<Any>
+
+    // 创建愿望定价对话
+    @POST("api/v1/ai/wish-pricing-sessions/")
+    suspend fun createWishPricingSession(
+        @Body request: CreateWishPricingSessionRequest
+    ): WishPricingSessionResponse
+
+    // 取消或确认愿望定价
+    @POST("api/v1/ai/wish-pricing-sessions/{id}/confirm/")
+    suspend fun confirmWishPricingSession(
+        @Path("id") sessionId: Int,
+        @Body request: ConfirmWishPricingRequest
+    ): WishPricingSessionResponse
+
+    // 获取愿望定价对话
+    @GET("api/v1/ai/wish-pricing-sessions/")
+    suspend fun getWishPricingSessions(): ApiResponse<PaginatedWishPricingSessions>
+
+    /**
+     * 每日刷新愿望候选（后端默认每天一次）
+     * @param force 可选，强制重新生成
+     * @param refreshDate 可选，指定日期 "YYYY-MM-DD"
+     */
+    @POST("api/v1/ai/wish-pricing-sessions/daily-refresh/")
+    suspend fun getDailyWishCandidate(
+        @Body request: DailyRefreshRequest
+    ): WishPricingSessionResponse
 }
 
 
@@ -131,6 +215,28 @@ data class TaskCompleteRecord(
     val status: String,
     val progress: Int
 )
+
+// 获取愿望定价请求体
+data class PaginatedWishPricingSessions(
+    val count: Int,
+    val results: List<WishPricingSession>
+)
+
+// 获取每日专属任务请求体数据类
+data class DailyRefreshRequest(
+    val force: Boolean? = null,
+    val refresh_date: String? = null
+)
+
+// 解析字符串组函数
+fun Any?.toUserFitNotesString(): String? {
+    return when (this) {
+        null -> null
+        is String -> this
+        is List<*> -> this.joinToString(separator = "\n") { it.toString() }
+        else -> this.toString()
+    }
+}
 
 //interface TaskApi {
 //    @POST("api/v1/tasks/tasks/{id}/complete/")
