@@ -2,19 +2,34 @@ import os
 from unittest import skipUnless
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import TestCase, override_settings
+from django.test import RequestFactory
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.ai.models import AITaskPricingSession, AIWishPricingSession
+from apps.ai.admin import AIWishPricingSessionAdmin
 from apps.ai.services import accept_task_pricing_session, create_task_pricing_session, revise_task_pricing_session
+from apps.users.admin import UserAdmin
 from apps.tasks.models import PricingStatus, Task
 from apps.shop.models import ShopItemCategory, WishItem
 from apps.users.models import DynamicProfile, StableProfile
 
 
 MOCK_AI_ENV = {"AI_PROVIDER": "mock", "AI_API_KEY": ""}
+
+
+def build_admin_request(user):
+    request = RequestFactory().get("/admin/")
+    request.user = user
+    SessionMiddleware(lambda req: None).process_request(request)
+    request.session.save()
+    request._messages = FallbackStorage(request)
+    return request
 
 
 class TaskPricingAssistantTests(TestCase):
@@ -400,6 +415,52 @@ class WishPricingAssistantApiTests(TestCase):
             ).count(),
             1,
         )
+
+
+class WishPricingAdminActionTests(TestCase):
+    def setUp(self):
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="admin_wish_tester",
+            email="admin-wish@example.com",
+            password="Password123!",
+        )
+        self.user = get_user_model().objects.create_user(
+            username="admin_target_user",
+            email="admin-target@example.com",
+            password="Password123!",
+        )
+
+    def test_user_admin_can_generate_daily_wish_candidate(self):
+        model_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            model_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        self.assertEqual(session.source, AIWishPricingSession.Source.DAILY_REFRESH)
+        self.assertEqual(session.status, AIWishPricingSession.Status.WAITING_CONFIRMATION)
+
+    def test_wish_session_admin_can_accept_candidate(self):
+        user_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            user_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        session_admin = AIWishPricingSessionAdmin(AIWishPricingSession, admin.site)
+        session_admin.accept_wish_candidates(request, AIWishPricingSession.objects.filter(pk=session.pk))
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, AIWishPricingSession.Status.ACCEPTED)
+        self.assertIsNotNone(session.generated_item)
+        self.assertEqual(WishItem.objects.filter(owner=self.user, category=ShopItemCategory.WISH).count(), 1)
 
 
 @skipUnless(

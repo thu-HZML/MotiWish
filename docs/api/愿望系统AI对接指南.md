@@ -168,3 +168,62 @@ python manage.py generate_daily_wishes --user-id 1
 ```
 
 部署时可用 cron、Kubernetes CronJob 或服务器定时任务在固定时间调用该命令。
+
+## 8. 无服务器权限的后台测试方式
+
+如果开发或测试同事没有服务器 SSH 权限，可以直接使用 Django Admin 测试愿望刷新流程。
+
+### 8.1 生成每日愿望候选
+
+进入：
+
+`/admin/users/user/`
+
+操作步骤：
+
+1. 勾选一个或多个测试用户。
+2. 在动作下拉框选择：
+   - `为选中用户生成今日 AI 愿望候选`
+   - 或 `为选中用户强制重刷今日 AI 愿望候选`
+3. 点击执行。
+
+执行后，系统会为选中用户生成 `daily_refresh` 类型的 `AIWishPricingSession`。
+
+### 8.2 查看候选
+
+进入：
+
+`/admin/ai/aiwishpricingsession/`
+
+可以查看：
+
+- `source`
+- `status`
+- `refresh_date`
+- `wish_payload`
+- `quote_payload`
+- `generated_item`
+
+### 8.3 确认或取消候选
+
+在 `/admin/ai/aiwishpricingsession/` 中：
+
+1. 勾选一个或多个 `waiting_confirmation` 状态的候选。
+2. 在动作下拉框选择：
+   - `确认选中的愿望候选并创建商品`
+   - 或 `取消选中的愿望候选`
+3. 点击执行。
+
+确认后会创建用户私有的愿望商品，前端可通过：
+
+`GET /api/v1/shop/items/?category=wish_reward`
+
+看到该商品。
+
+### 8.4 推荐测试路径
+
+1. 用 Admin 用户登录后台。
+2. 在用户列表中为测试用户生成今日愿望候选。
+3. 到 AI 愿望定价会话列表查看候选内容和价格。
+4. 确认候选。
+5. 用前端测试账号刷新愿望商品列表，确认新商品出现。
