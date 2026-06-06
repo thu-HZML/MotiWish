@@ -1,13 +1,16 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone as dt_timezone
+from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.tasks.models import DifficultyLevel, PricingStatus, RecurrenceType, SettlementTrack, Task, TaskOccurrence, TaskType
-from apps.tasks.services import ensure_occurrences_for_date
+from apps.tasks.models import DifficultyLevel, OccurrenceStatus, PricingStatus, RecurrenceType, SettlementTrack, Task, TaskOccurrence, TaskType
+from apps.tasks.services import ensure_occurrences_for_date, sync_overdue_one_time_tasks
 from apps.wallet.models import Wallet
 
 
@@ -141,6 +144,137 @@ class TaskListApiTests(TestCase):
         self.assertEqual(response.data["data"]["count"], 1)
         self.assertEqual(len(response.data["data"]["results"]), 1)
         self.assertEqual(response.data["data"]["results"][0]["title"], "我的任务")
+
+
+class TaskTimezoneApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="task_timezone_user",
+            email="task-timezone@example.com",
+            password="Password123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_task_create_preserves_user_supplied_due_at_offset(self):
+        user_due_at = "2026-06-06T17:18:00+08:00"
+        response = self.client.post(
+            reverse("task-list"),
+            {
+                "title": "test_time2",
+                "task_type": TaskType.ONE_TIME,
+                "recurrence": RecurrenceType.NONE,
+                "settlement_track": SettlementTrack.REGULAR,
+                "difficulty_level": DifficultyLevel.MEDIUM,
+                "progress_target": 100,
+                "reward_primary": 160,
+                "penalty_primary": 25,
+                "due_at": user_due_at,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["data"]["due_at"], user_due_at)
+        task = Task.objects.get(pk=response.data["data"]["id"])
+        self.assertEqual(task.pricing_snapshot["user_time_fields"]["due_at"], user_due_at)
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_today_marks_one_time_task_missed_after_user_supplied_due_at(self):
+        user_due_at = "2026-06-06T17:18:00+08:00"
+        task = Task.objects.create(
+            owner=self.user,
+            title="test_time2",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            reward_primary=160,
+            penalty_primary=25,
+            progress_target=100,
+            due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
+        )
+
+        now_after_user_deadline = datetime(2026, 6, 6, 9, 20, tzinfo=dt_timezone.utc)
+        with patch("apps.tasks.services.timezone.now", return_value=now_after_user_deadline):
+            response = self.client.get(reverse("task-today"), {"date": "2026-06-06"})
+
+        self.assertEqual(response.status_code, 200)
+        occurrence = TaskOccurrence.objects.get(task=task, occurrence_date=date(2026, 6, 6))
+        self.assertEqual(occurrence.status, OccurrenceStatus.MISSED)
+        self.assertEqual(response.data["data"][0]["status"], OccurrenceStatus.MISSED)
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_sync_overdue_command_marks_one_time_task_missed(self):
+        user_due_at = "2026-06-06T17:18:00+08:00"
+        task = Task.objects.create(
+            owner=self.user,
+            title="command_sync_time",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
+        )
+
+        now_after_user_deadline = datetime(2026, 6, 6, 9, 20, tzinfo=dt_timezone.utc)
+        with patch("apps.tasks.services.timezone.now", return_value=now_after_user_deadline):
+            out = StringIO()
+            call_command("sync_overdue_tasks", stdout=out)
+
+        occurrence = TaskOccurrence.objects.get(task=task, occurrence_date=date(2026, 6, 6))
+        self.assertEqual(occurrence.status, OccurrenceStatus.MISSED)
+        self.assertIn("missed=1", out.getvalue())
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_task_list_syncs_overdue_tasks_for_current_user_only(self):
+        other_user = get_user_model().objects.create_user(
+            username="task_timezone_other",
+            email="task-timezone-other@example.com",
+            password="Password123!",
+        )
+        user_due_at = "2026-06-06T17:18:00+08:00"
+        task = Task.objects.create(
+            owner=self.user,
+            title="list_sync_time",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
+        )
+        other_task = Task.objects.create(
+            owner=other_user,
+            title="other_list_sync_time",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
+        )
+
+        now_after_user_deadline = datetime(2026, 6, 6, 9, 20, tzinfo=dt_timezone.utc)
+        with patch("apps.tasks.services.timezone.now", return_value=now_after_user_deadline):
+            response = self.client.get(reverse("task-list"), {"page": 1})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(TaskOccurrence.objects.filter(task=task, status=OccurrenceStatus.MISSED).exists())
+        self.assertFalse(TaskOccurrence.objects.filter(task=other_task).exists())
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_sync_overdue_service_does_not_mark_before_user_deadline(self):
+        user_due_at = "2026-06-06T17:18:00+08:00"
+        Task.objects.create(
+            owner=self.user,
+            title="before_deadline",
+            task_type=TaskType.ONE_TIME,
+            recurrence=RecurrenceType.NONE,
+            due_at=datetime(2026, 6, 6, 9, 18, tzinfo=dt_timezone.utc),
+            pricing_snapshot={"user_time_fields": {"due_at": user_due_at}},
+        )
+
+        before_user_deadline = datetime(2026, 6, 6, 9, 17, tzinfo=dt_timezone.utc)
+        result = sync_overdue_one_time_tasks(user=self.user, now=before_user_deadline)
+
+        self.assertEqual(result["missed_count"], 0)
+        self.assertEqual(TaskOccurrence.objects.count(), 0)
 
 
 class TaskProgressApiTests(TestCase):

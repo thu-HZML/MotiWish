@@ -1,8 +1,9 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 from apps.tasks.models import (
     OccurrenceStatus,
@@ -33,6 +34,104 @@ from apps.wallet.models import CurrencyType, TransactionReason, Wallet
 from apps.wallet.services import change_balance
 
 
+def _user_time_fields(task):
+    return (task.pricing_snapshot or {}).get("user_time_fields") or {}
+
+
+def _date_from_user_iso(value):
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _datetime_from_user_iso(value):
+    if not value:
+        return None
+    parsed = parse_datetime(str(value))
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        return timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _task_due_date(task):
+    raw_due_at = _user_time_fields(task).get("due_at")
+    user_date = _date_from_user_iso(raw_due_at)
+    if user_date:
+        return user_date
+    return timezone.localdate(task.due_at) if task.due_at else None
+
+
+def _task_due_at(task):
+    raw_due_at = _user_time_fields(task).get("due_at")
+    return _datetime_from_user_iso(raw_due_at) or task.due_at
+
+
+def _one_time_task_is_overdue(task, now=None):
+    if task.task_type != TaskType.ONE_TIME:
+        return False
+    due_at = _task_due_at(task)
+    if not due_at:
+        return False
+    now = now or timezone.now()
+    return now > due_at
+
+
+def _sync_overdue_one_time_occurrence(task, occurrence, now=None):
+    if occurrence.status != OccurrenceStatus.PENDING:
+        return occurrence
+    if not _one_time_task_is_overdue(task, now=now):
+        return occurrence
+    occurrence.status = OccurrenceStatus.MISSED
+    occurrence.settled_at = now or timezone.now()
+    occurrence.save(update_fields=["status", "settled_at", "updated_at"])
+    return occurrence
+
+
+@transaction.atomic
+def sync_overdue_one_time_tasks(*, user=None, now=None):
+    now = now or timezone.now()
+    queryset = Task.objects.select_for_update().filter(
+        task_type=TaskType.ONE_TIME,
+        status="active",
+        due_at__isnull=False,
+    )
+    if user is not None:
+        queryset = queryset.filter(owner=user)
+
+    checked_count = 0
+    missed_count = 0
+    occurrence_ids = []
+    for task in queryset.select_related("owner"):
+        if not _one_time_task_is_overdue(task, now=now):
+            continue
+        due_date = _task_due_date(task)
+        if not due_date:
+            continue
+        occurrence, _ = TaskOccurrence.objects.select_for_update().get_or_create(
+            task=task,
+            occurrence_date=due_date,
+            defaults={"owner": task.owner},
+        )
+        checked_count += 1
+        old_status = occurrence.status
+        _sync_overdue_one_time_occurrence(task, occurrence, now=now)
+        if old_status != occurrence.status and occurrence.status == OccurrenceStatus.MISSED:
+            missed_count += 1
+            occurrence_ids.append(occurrence.id)
+
+    return {
+        "checked_count": checked_count,
+        "missed_count": missed_count,
+        "occurrence_ids": occurrence_ids,
+        "synced_at": now.isoformat(),
+    }
+
+
 def _task_matches_date(task, target_date):
     if task.status != "active":
         return False
@@ -44,7 +143,8 @@ def _task_matches_date(task, target_date):
         available_from = task.starts_on or timezone.localdate(task.created_at)
         if target_date < available_from:
             return False
-        return target_date <= task.due_at.date() if task.due_at else True
+        due_date = _task_due_date(task)
+        return target_date <= due_date if due_date else True
     if task.task_type == TaskType.DAILY or task.recurrence == RecurrenceType.DAILY:
         return True
     if task.recurrence == RecurrenceType.WEEKLY:
@@ -68,6 +168,7 @@ def _task_can_settle_date(task, target_date):
 def ensure_occurrences_for_date(user, target_date):
     tasks = Task.objects.filter(owner=user)
     occurrence_ids = []
+    now = timezone.now()
     for task in tasks:
         if _task_matches_date(task, target_date):
             occurrence, _ = TaskOccurrence.objects.get_or_create(
@@ -75,6 +176,7 @@ def ensure_occurrences_for_date(user, target_date):
                 occurrence_date=target_date,
                 defaults={"owner": user},
             )
+            _sync_overdue_one_time_occurrence(task, occurrence, now=now)
             occurrence_ids.append(occurrence.id)
     return TaskOccurrence.objects.filter(id__in=occurrence_ids).select_related("task")
 

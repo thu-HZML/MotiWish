@@ -1,6 +1,7 @@
 from datetime import date
 
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, extend_schema_view
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -18,7 +19,7 @@ from apps.tasks.serializers import (
     TaskUpdateSerializer,
     build_preview_response,
 )
-from apps.tasks.services import complete_task, ensure_occurrences_for_date, update_task_progress
+from apps.tasks.services import complete_task, ensure_occurrences_for_date, sync_overdue_one_time_tasks, update_task_progress
 
 
 @extend_schema_view(
@@ -55,6 +56,10 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def list(self, request, *args, **kwargs):
+        sync_overdue_one_time_tasks(user=request.user)
+        return super().list(request, *args, **kwargs)
+
     @extend_schema(
         tags=["Tasks"],
         summary="预览任务定价上下文",
@@ -74,13 +79,15 @@ class TaskViewSet(ApiResponseMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], url_path="today")
     def today(self, request):
         value = request.query_params.get("date")
-        target_date = date.fromisoformat(value) if value else date.today()
+        target_date = date.fromisoformat(value) if value else timezone.localdate()
+        sync_overdue_one_time_tasks(user=request.user)
         queryset = ensure_occurrences_for_date(request.user, target_date)
         return api_response(data=TaskOccurrenceSerializer(queryset, many=True).data, message="获取任务成功")
 
     @extend_schema(tags=["Tasks"], summary="获取任务历史记录", description="返回当前用户任务实例历史记录。", responses=api_envelope_serializer("TaskHistoryResponse", TaskOccurrenceSerializer(many=True)))
     @action(detail=False, methods=["get"], url_path="history")
     def history(self, request):
+        sync_overdue_one_time_tasks(user=request.user)
         queryset = TaskOccurrence.objects.filter(owner=request.user).select_related("task")[:100]
         return api_response(data=TaskOccurrenceSerializer(queryset, many=True).data, message="获取历史记录成功")
 
