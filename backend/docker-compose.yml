@@ -57,6 +57,7 @@ services:
       TZ: ${SCHEDULER_TZ:-Asia/Shanghai}
       DAILY_WISH_REFRESH_TIME: ${DAILY_WISH_REFRESH_TIME:-08:00}
       DAILY_WISH_FORCE: ${DAILY_WISH_FORCE:-false}
+      OVERDUE_TASK_SYNC_INTERVAL_SECONDS: ${OVERDUE_TASK_SYNC_INTERVAL_SECONDS:-900}
     command: ["/app/deploy/scripts/daily-wish-scheduler.sh"]
     depends_on:
       db:

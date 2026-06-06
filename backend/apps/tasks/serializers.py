@@ -28,6 +28,36 @@ class TaskSerializer(serializers.ModelSerializer):
                 data[field] = user_time_fields[field]
         return data
 
+    def _raw_user_time_fields(self):
+        initial_data = getattr(self, "initial_data", {}) or {}
+        return {
+            field: initial_data[field]
+            for field in ("starts_on", "ends_on", "due_at")
+            if initial_data.get(field) not in (None, "")
+        }
+
+    def _merge_user_time_fields(self, instance):
+        user_time_fields = self._raw_user_time_fields()
+        if not user_time_fields:
+            return instance
+        instance.pricing_snapshot = {
+            **(instance.pricing_snapshot or {}),
+            "user_time_fields": {
+                **((instance.pricing_snapshot or {}).get("user_time_fields") or {}),
+                **user_time_fields,
+            },
+        }
+        instance.save(update_fields=["pricing_snapshot", "updated_at"])
+        return instance
+
+    def create(self, validated_data):
+        instance = super().create(validated_data)
+        return self._merge_user_time_fields(instance)
+
+    def update(self, instance, validated_data):
+        instance = super().update(instance, validated_data)
+        return self._merge_user_time_fields(instance)
+
     def validate(self, attrs):
         task_type = attrs.get("task_type", getattr(self.instance, "task_type", None))
         recurrence = attrs.get("recurrence", getattr(self.instance, "recurrence", "none"))
