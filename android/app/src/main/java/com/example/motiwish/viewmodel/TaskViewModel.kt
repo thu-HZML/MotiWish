@@ -67,7 +67,6 @@ class TaskViewModel(
     private var nextDraftId = 1
 
     init {
-        loadTodayMetric()
         loadTodayOccurrences()     // 从云端加载今日所有任务实例
     }
 
@@ -534,6 +533,19 @@ class TaskViewModel(
                 _uiMessage.emit("同步失败：${e.message}")
             }
         }
+    }
+
+    fun resetData() {
+        // 清空所有状态
+        _todayMetric.value = null
+        _todaysPeriodicTasks.value = emptyList()
+        _oneShotTasks.value = emptyList()
+        _taskDrafts.value = emptyList()
+        _selectedDraftForPricing.value = null
+        _pricingSession.value = null
+        _isPricingLoading.value = false
+        // 重置草稿 ID 计数器
+        nextDraftId = 1
     }
 }
 
