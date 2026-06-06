@@ -134,7 +134,7 @@ fun ProfileScreen(
                     Column {
                         if (userProfile != null) {
                             Text(
-                                text = userProfile?.username ?: userProfile?.display_nickname ?: "User",
+                                text = userProfile?.display_nickname.takeIf { !it.isNullOrBlank() } ?: userProfile?.username ?: "User",
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
