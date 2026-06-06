@@ -1,9 +1,14 @@
+import json
+
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 
 from apps.ai.graphs.task_pricing import build_task_pricing_graph
-from apps.ai.models import AITaskPricingSession
-from apps.tasks.models import PricingStatus
+from apps.ai.graphs.wish_pricing import build_wish_pricing_graph
+from apps.ai.models import AITaskPricingSession, AIWishPricingSession
+from apps.shop.models import ShopItemCategory, WishItem
+from apps.tasks.models import PricingStatus, Task, TaskOccurrence
 from apps.tasks.serializers import TaskSerializer
 from apps.tasks.pricing import estimate_difficulty_level, estimate_task_size
 from apps.users.models import DynamicProfile
@@ -20,6 +25,51 @@ def _run_task_pricing_graph(*, user, task_payload, feedback_history=None):
     )
 
 
+def _run_wish_pricing_graph(*, user, wish_payload, source, context_snapshot):
+    graph = build_wish_pricing_graph()
+    return graph.invoke(
+        {
+            "user_id": user.id,
+            "source": source,
+            "wish_payload": wish_payload,
+            "context_snapshot": context_snapshot,
+        }
+    )
+
+
+def build_wish_context_snapshot(*, user):
+    recent_active_tasks = list(
+        Task.objects.filter(owner=user, status="active")
+        .order_by("-updated_at")
+        .values(
+            "id",
+            "title",
+            "task_type",
+            "recurrence",
+            "difficulty_level",
+            "progress_target",
+            "due_at",
+        )[:8]
+    )
+    recent_wishes = list(
+        WishItem.objects.filter(owner=user, category=ShopItemCategory.WISH)
+        .order_by("-created_at")
+        .values("id", "title", "price_tier", "price_secondary", "created_at")[:8]
+    )
+    recent_task_occurrences = list(
+        TaskOccurrence.objects.filter(owner=user)
+        .select_related("task")
+        .order_by("-occurrence_date", "-updated_at")
+        .values("id", "task_id", "task__title", "occurrence_date", "status", "progress")[:12]
+    )
+    snapshot = {
+        "recent_active_tasks": recent_active_tasks,
+        "recent_task_occurrences": recent_task_occurrences,
+        "recent_wishes": recent_wishes,
+    }
+    return json.loads(json.dumps(snapshot, cls=DjangoJSONEncoder))
+
+
 @transaction.atomic
 def create_task_pricing_session(*, user, task_payload):
     state = _run_task_pricing_graph(user=user, task_payload=task_payload)
@@ -33,6 +83,93 @@ def create_task_pricing_session(*, user, task_payload):
         quote_payload=state["quote_payload"],
         feedback_history=[],
     )
+
+
+@transaction.atomic
+def create_wish_pricing_session(*, user, wish_payload, source=AIWishPricingSession.Source.MANUAL, refresh_date=None):
+    context_snapshot = build_wish_context_snapshot(user=user)
+    state = _run_wish_pricing_graph(
+        user=user,
+        wish_payload=wish_payload,
+        source=source,
+        context_snapshot=context_snapshot,
+    )
+    return AIWishPricingSession.objects.create(
+        owner=user,
+        source=source,
+        status=AIWishPricingSession.Status.WAITING_CONFIRMATION,
+        refresh_date=refresh_date,
+        wish_payload=wish_payload,
+        context_snapshot=context_snapshot,
+        profile_snapshot=state.get("profile_snapshot", {}),
+        pricing_standard_version=state.get("pricing_standard_version", "wish_pricing_v1"),
+        pricing_standard_excerpt=state.get("pricing_standard", ""),
+        quote_payload=state["quote_payload"],
+    )
+
+
+@transaction.atomic
+def generate_daily_wish_refresh(*, user, refresh_date=None, force=False):
+    refresh_date = refresh_date or timezone.localdate()
+    existing = AIWishPricingSession.objects.filter(
+        owner=user,
+        source=AIWishPricingSession.Source.DAILY_REFRESH,
+        refresh_date=refresh_date,
+    ).first()
+    if existing and not force:
+        return existing, False
+    if existing and force:
+        existing.delete()
+
+    session = create_wish_pricing_session(
+        user=user,
+        wish_payload={},
+        source=AIWishPricingSession.Source.DAILY_REFRESH,
+        refresh_date=refresh_date,
+    )
+    return session, True
+
+
+@transaction.atomic
+def accept_wish_pricing_session(*, session):
+    session = AIWishPricingSession.objects.select_for_update().get(pk=session.pk)
+    if session.status != AIWishPricingSession.Status.WAITING_CONFIRMATION:
+        raise ValueError("只有等待确认的愿望定价会话可以确认")
+
+    quote = session.quote_payload
+    item = WishItem.objects.create(
+        owner=session.owner,
+        catalog_key="",
+        title=quote.get("title") or session.wish_payload.get("title") or "AI 愿望奖励",
+        description=quote.get("description") or session.wish_payload.get("description", ""),
+        category=ShopItemCategory.WISH,
+        rarity=quote.get("rarity", "common"),
+        price_tier=quote["price_tier"],
+        price_secondary=quote["price_secondary"],
+        inventory=quote.get("inventory", session.wish_payload.get("inventory", 1)),
+        is_enabled=True,
+        is_stackable=True,
+        auto_refund_on_reject=True,
+        effect_payload={
+            "source": "ai_wish_pricing",
+            "pricing_session_id": session.id,
+            "pricing_source": session.source,
+        },
+    )
+    session.status = AIWishPricingSession.Status.ACCEPTED
+    session.generated_item = item
+    session.save(update_fields=["status", "generated_item", "updated_at"])
+    return session
+
+
+@transaction.atomic
+def cancel_wish_pricing_session(*, session):
+    session = AIWishPricingSession.objects.select_for_update().get(pk=session.pk)
+    if session.status != AIWishPricingSession.Status.WAITING_CONFIRMATION:
+        raise ValueError("只有等待确认的愿望定价会话可以取消")
+    session.status = AIWishPricingSession.Status.CANCELLED
+    session.save(update_fields=["status", "updated_at"])
+    return session
 
 
 @transaction.atomic

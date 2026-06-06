@@ -2,18 +2,34 @@ import os
 from unittest import skipUnless
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import TestCase, override_settings
+from django.test import RequestFactory
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.ai.models import AITaskPricingSession
+from apps.ai.models import AITaskPricingSession, AIWishPricingSession
+from apps.ai.admin import AIWishPricingSessionAdmin
 from apps.ai.services import accept_task_pricing_session, create_task_pricing_session, revise_task_pricing_session
+from apps.users.admin import UserAdmin
 from apps.tasks.models import PricingStatus, Task
+from apps.shop.models import ShopItemCategory, WishItem
 from apps.users.models import DynamicProfile, StableProfile
 
 
 MOCK_AI_ENV = {"AI_PROVIDER": "mock", "AI_API_KEY": ""}
+
+
+def build_admin_request(user):
+    request = RequestFactory().get("/admin/")
+    request.user = user
+    SessionMiddleware(lambda req: None).process_request(request)
+    request.session.save()
+    request._messages = FallbackStorage(request)
+    return request
 
 
 class TaskPricingAssistantTests(TestCase):
@@ -331,6 +347,120 @@ class TaskPricingAssistantApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+
+class WishPricingAssistantApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="wish_pricing_user",
+            email="wish-pricing@example.com",
+            password="Password123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_manual_wish_pricing_accept_creates_private_shop_item(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            response = self.client.post(
+                reverse("ai-wish-pricing-session-list"),
+                {
+                    "wish_payload": {
+                        "title": "周末去喜欢的餐厅吃饭",
+                        "description": "完成本周任务后的奖励。",
+                        "tags": ["food", "rest"],
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        session_data = response.data["data"]
+        self.assertEqual(session_data["status"], AIWishPricingSession.Status.WAITING_CONFIRMATION)
+        self.assertEqual(session_data["quote_payload"]["price_tier"], "medium")
+
+        accept_response = self.client.post(
+            reverse("ai-wish-pricing-session-confirm", kwargs={"pk": session_data["id"]}),
+            {"action": "accept"},
+            format="json",
+        )
+
+        self.assertEqual(accept_response.status_code, 200)
+        accepted_data = accept_response.data["data"]
+        self.assertEqual(accepted_data["status"], AIWishPricingSession.Status.ACCEPTED)
+        item = WishItem.objects.get(pk=accepted_data["generated_item"]["id"])
+        self.assertEqual(item.owner, self.user)
+        self.assertEqual(item.category, ShopItemCategory.WISH)
+        self.assertEqual(item.price_tier, "medium")
+        self.assertEqual(item.effect_payload["pricing_session_id"], session_data["id"])
+
+    def test_daily_refresh_is_idempotent_and_can_force_regenerate(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            first_response = self.client.post(reverse("ai-wish-pricing-session-daily-refresh"), {}, format="json")
+            second_response = self.client.post(reverse("ai-wish-pricing-session-daily-refresh"), {}, format="json")
+            forced_response = self.client.post(
+                reverse("ai-wish-pricing-session-daily-refresh"),
+                {"force": True},
+                format="json",
+            )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(forced_response.status_code, 200)
+        self.assertEqual(first_response.data["data"]["id"], second_response.data["data"]["id"])
+        self.assertNotEqual(first_response.data["data"]["id"], forced_response.data["data"]["id"])
+        self.assertEqual(
+            AIWishPricingSession.objects.filter(
+                owner=self.user,
+                source=AIWishPricingSession.Source.DAILY_REFRESH,
+            ).count(),
+            1,
+        )
+
+
+class WishPricingAdminActionTests(TestCase):
+    def setUp(self):
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="admin_wish_tester",
+            email="admin-wish@example.com",
+            password="Password123!",
+        )
+        self.user = get_user_model().objects.create_user(
+            username="admin_target_user",
+            email="admin-target@example.com",
+            password="Password123!",
+        )
+
+    def test_user_admin_can_generate_daily_wish_candidate(self):
+        model_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            model_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        self.assertEqual(session.source, AIWishPricingSession.Source.DAILY_REFRESH)
+        self.assertEqual(session.status, AIWishPricingSession.Status.WAITING_CONFIRMATION)
+
+    def test_wish_session_admin_can_accept_candidate(self):
+        user_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            user_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        session_admin = AIWishPricingSessionAdmin(AIWishPricingSession, admin.site)
+        session_admin.accept_wish_candidates(request, AIWishPricingSession.objects.filter(pk=session.pk))
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, AIWishPricingSession.Status.ACCEPTED)
+        self.assertIsNotNone(session.generated_item)
+        self.assertEqual(WishItem.objects.filter(owner=self.user, category=ShopItemCategory.WISH).count(), 1)
 
 
 @skipUnless(
