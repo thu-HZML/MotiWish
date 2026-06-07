@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -868,57 +869,6 @@ fun DailyMetricCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TimePickerDialog(
-    initialTime: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val parts = initialTime.split(":").mapNotNull { it.toIntOrNull() }
-    val initialHour = parts.getOrElse(0) { 0 }.coerceIn(0, 23)
-    val initialMinute = parts.getOrElse(1) { 0 }.coerceIn(0, 59)
-
-    val timePickerState = rememberTimePickerState(
-        initialHour = initialHour,
-        initialMinute = initialMinute,
-        is24Hour = true
-    )
-
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                TimePicker(state = timePickerState)
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("取消")
-                    }
-                    TextButton(
-                        onClick = {
-                            val hour = timePickerState.hour
-                            val minute = timePickerState.minute
-                            val timeStr = String.format("%02d:%02d", hour, minute)
-                            onConfirm(timeStr)
-                        }
-                    ) {
-                        Text("确定")
-                    }
-                }
-            }
-        }
-    }
-}
-
 // 周期任务卡片（增强动画）
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1168,8 +1118,16 @@ fun OneShotTaskCard(
                             else -> "进行中"
                         }}"
                     )
-                    Text(
-                        "奖惩: ${task.actualReward ?: task.reward} / ${task.actualPenalty ?: task.penalty}",
+
+                    val actualReward = task.actualReward ?: 0
+                    val penalty = task.penalty
+                    val netReward = if (actualReward != 0) actualReward else -penalty
+                    val netText = when {
+                        netReward > 0 -> "+$netReward"
+                        netReward < 0 -> "$netReward"
+                        else -> "0"
+                    }
+                    Text(text = "货币: $netText",
                         color = if (task.status == "COMPLETED") MaterialTheme.colorScheme.primary else Color.Red
                     )
                 }

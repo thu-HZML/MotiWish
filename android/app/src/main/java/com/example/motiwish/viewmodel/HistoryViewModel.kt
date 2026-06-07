@@ -87,8 +87,23 @@ class HistoryViewModel(
                     val status = occurrence?.status ?: "pending"
                     val isCompleted = status == "completed"
                     val isDeadline = currentDate == dueDate
-                    val actualReward = occurrence?.settlement_details?.reward_primary   // 实际获得奖励
-                    val actualPenalty = occurrence?.settlement_details?.penalty_primary // 实际获得惩罚
+
+                    // 根据状态决定显示的实际奖惩
+                    val (displayReward, displayPenalty) = when (status) {
+                        "completed" -> {
+                            val reward = occurrence?.settlement_details?.reward_primary ?: task.reward_primary
+                            val penalty = 0
+                            Pair(reward, penalty)
+                        }
+                        "missed" -> {
+                            val reward = 0
+                            val penalty = task.penalty_primary
+                            Pair(reward, penalty)
+                        }
+                        else -> { // missed, cancelled, pending
+                            Pair(0, 0)
+                        }
+                    }
                     items.add(
                         HistoryItem(
                             title = task.title,
@@ -104,8 +119,8 @@ class HistoryViewModel(
                             penalty = if (!isCompleted) task.penalty_primary else 0,
                             type = "一次性",
                             isDeadline = isDeadline,
-                            actualReward = actualReward,
-                            actualPenalty = actualPenalty
+                            actualReward = displayReward,
+                            actualPenalty = displayPenalty
                         )
                     )
                     currentDate = currentDate.plusDays(1)
@@ -120,6 +135,22 @@ class HistoryViewModel(
                         val occurrence = occurrenceMap[key]
                         val status = occurrence?.status ?: "pending"
                         val isCompleted = status == "completed"
+                        // 根据状态决定显示的实际奖惩
+                        val (displayReward, displayPenalty) = when (status) {
+                            "completed" -> {
+                                val reward = task.reward_primary
+                                val penalty = 0
+                                Pair(reward, penalty)
+                            }
+                            "missed" -> {
+                                val reward = 0
+                                val penalty = task.penalty_primary
+                                Pair(reward, penalty)
+                            }
+                            else -> { // missed, cancelled, pending
+                                Pair(0, 0)
+                            }
+                        }
                         items.add(
                             HistoryItem(
                                 title = task.title,
@@ -134,7 +165,9 @@ class HistoryViewModel(
                                 reward = if (isCompleted) task.reward_primary else 0,
                                 penalty = if (!isCompleted) task.penalty_primary else 0,
                                 type = "周期",
-                                isDeadline = false
+                                isDeadline = false,
+                                actualReward = displayReward,
+                                actualPenalty = displayPenalty
                             )
                         )
                     }

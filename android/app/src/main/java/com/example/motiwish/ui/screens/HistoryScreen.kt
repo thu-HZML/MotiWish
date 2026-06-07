@@ -85,9 +85,6 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                     IconButton(onClick = { currentYearMonth = YearMonth.now() }) {
                         Icon(Icons.Default.Today, contentDescription = "今天", tint = Color.White)
                     }
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新", tint = Color.White)
-                    }
                 }
             )
         }
@@ -134,7 +131,7 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                             val isCurrentMonth = YearMonth.from(date) == currentYearMonth
                             val tasksOnDay = tasksByDate[date] ?: emptyList()
                             val pendingCount = tasksOnDay.count { it.status == "待完成" }
-                            val missedCount = tasksOnDay.count { it.status == "已错过" || it.status == "已取消" || it.status == "已完成"}
+                            val missedCount = tasksOnDay.count { it.status == "已错过" || it.status == "已取消"}
                             val hasDeadline = tasksOnDay.any { it.isDeadline }  // 检查是否有截止任务
                             CalendarDayCell(
                                 date = date,
@@ -167,12 +164,15 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                 if (tasks.isEmpty()) {
                     Text("当天没有任务记录")
                 } else {
-                    Column {
-                        tasks.forEach { task ->
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 400.dp),  // 限制最大高度，超出可滚动
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(tasks) { task ->
                             Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
                                     containerColor = when {
                                         task.status.contains("完成") -> MaterialTheme.colorScheme.surfaceVariant
@@ -189,12 +189,15 @@ fun HistoryScreen(viewModel: HistoryViewModel) {
                                     ) {
                                         Text("类型: ${task.type}", style = MaterialTheme.typography.bodySmall)
                                         Text("状态: ${task.status}", style = MaterialTheme.typography.bodySmall)
+                                        val netReward = (task.actualReward ?: task.reward) - (task.actualPenalty ?: task.penalty)
+                                        val netText = when {
+                                            netReward > 0 -> "+$netReward"
+                                            netReward < 0 -> "$netReward"   // 例如 -20
+                                            else -> "0"
+                                        }
                                         Text(
-                                            "货币: ${if (task.actualReward != null && task.actualPenalty != null)
-                                                "+${task.actualReward} / -${task.actualPenalty}"
-                                            else
-                                                "+${task.reward} / -${task.penalty}"}",
-                                            style = MaterialTheme.typography.bodySmall
+                                            text = "货币: $netText",
+                                            style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
                                 }
