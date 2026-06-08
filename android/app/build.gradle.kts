@@ -43,6 +43,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4" // 与你的 Kotlin 版本匹配
     }
+
+    // 忽略证书验证
+    buildFeatures {
+        buildConfig = true
+    }
 }
 
 dependencies {

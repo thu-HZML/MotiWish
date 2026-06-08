@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.motiwish.viewmodel.AuthViewModel
+import androidx.compose.material.icons.filled.AutoAwesome
 
 @Composable
 fun SplashAuthScreen(
@@ -35,6 +36,7 @@ fun SplashAuthScreen(
 
     val username by viewModel.username.collectAsState()
     val password by viewModel.password.collectAsState()
+    val confirmPassword by viewModel.confirmPassword.collectAsState()
     val email by viewModel.email.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -70,8 +72,8 @@ fun SplashAuthScreen(
                 modifier = Modifier.offset(y = if (showLoginPanel) (-180).dp else 0.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "Logo",
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "MotiWish Logo",
                     modifier = Modifier.size(80.dp),
                     tint = Color.White
                 )
@@ -155,6 +157,25 @@ fun SplashAuthScreen(
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
                         )
+                        AnimatedVisibility(
+                            visible = isRegisterMode,
+                            enter = fadeIn() + slideInVertically(initialOffsetY = { -it / 2 }),
+                            exit = fadeOut()
+                        ) {
+                            Column {
+                                // 把间距放在动画内部，保证切换登录模式时不会多出多余的空白
+                                Spacer(modifier = Modifier.height(16.dp))
+                                OutlinedTextField(
+                                    value = confirmPassword,
+                                    onValueChange = { viewModel.confirmPassword.value = it },
+                                    label = { Text("确认密码") },
+                                    leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(28.dp))
 
                         // 主操作按钮（登录 或 注册）

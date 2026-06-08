@@ -1,5 +1,6 @@
 package com.example.motiwish
 
+import AuthInterceptor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,12 +23,17 @@ import com.example.motiwish.ui.screens.*
 import com.example.motiwish.ui.theme.MySelfManagementAppTheme
 import com.example.motiwish.viewmodel.*
 import androidx.work.*
+import com.example.motiwish.data.network.WalletApi
+import com.example.motiwish.data.network.GachaApi
+import com.example.motiwish.data.network.ShopApi
+import com.example.motiwish.data.network.TaskApi
 import java.util.concurrent.TimeUnit
 
 // 图标导入
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.EventNote
 import androidx.compose.material.icons.filled.*
+import androidx.navigation.NavType
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 import retrofit2.Retrofit
@@ -36,8 +42,23 @@ import com.example.motiwish.data.network.AuthApi
 
 import okhttp3.OkHttpClient
 import com.example.motiwish.data.network.TokenManager
-import com.example.motiwish.data.network.AuthInterceptor
 import com.example.motiwish.data.network.UserApi
+import javax.net.ssl.TrustManager
+
+// 忽略证书验证
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.X509TrustManager
+
+// 日志拦截器
+//import okhttp3.logging.HttpLoggingInterceptor
+
+import coil.ImageLoader
+import coil.Coil
+
+// 画像
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
 
@@ -50,25 +71,69 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var userViewModel: UserViewModel
 
+    // 辅助函数：仅用于调试，信任所有证书
+    private fun createUnsafeOkHttpClient(interceptor: AuthInterceptor): OkHttpClient {
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+        return OkHttpClient.Builder()
+            .addInterceptor(interceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         // 初始化数据库和仓库
         database = AppDatabase.getDatabase(this)
-        taskRepository = TaskRepository(database.taskDao())
-        currencyRepository = CurrencyRepository(database.currencyDao())
+        
+        //currencyRepository = CurrencyRepository(database.currencyDao())
+        //taskRepository = TaskRepository(database.taskDao())
+        
         wishRepository = WishRepository(database.wishDao())
 
         // 初始化 Token 管理器
         TokenManager.init(this)
-
+/*
         // 创建 OkHttpClient 并添加 AuthInterceptor
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor())
-            .build()
+            .connectTimeout(30, TimeUnit.SECONDS) // 连接超时 30 秒
+            .readTimeout(30, TimeUnit.SECONDS)    // 读取超时 30 秒
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()*/
+
+        // 日志拦截器
+        //val loggingInterceptor = HttpLoggingInterceptor().apply {
+        //    level = HttpLoggingInterceptor.Level.BODY   // 打印完整的请求/响应体
+        //}
+
+        // 忽略证书验证
+        val authInterceptor = AuthInterceptor()
+        val okHttpClient = if (BuildConfig.DEBUG) {
+            createUnsafeOkHttpClient(authInterceptor)
+        } else {
+            OkHttpClient.Builder()
+                .addInterceptor(authInterceptor)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build()
+        }
+
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("http://8.147.57.94/")
+            .baseUrl("https://8.147.57.94/")
+            //.baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
@@ -76,27 +141,86 @@ class MainActivity : ComponentActivity() {
 
         // 【新增 3】创建 UserApi 和 UserViewModel
         val userApi = retrofit.create(UserApi::class.java)
+        val walletApi = retrofit.create(WalletApi::class.java)
+        val gachaApi = retrofit.create(GachaApi::class.java)
+        val shopApi = retrofit.create(ShopApi::class.java)
+
+        currencyRepository = CurrencyRepository(walletApi)
         userViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return UserViewModel(userApi) as T
             }
         })[UserViewModel::class.java]
 
+        // 创建 TaskApi
+        val taskApi = retrofit.create(TaskApi::class.java)
+        taskRepository = TaskRepository(database.taskDao(), taskApi)
+        val gachaViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return GachaViewModel(gachaApi, currencyRepository) as T // <--- 【修改这行】
+            }
+        })[GachaViewModel::class.java]
+
+        val shopViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return ShopViewModel(currencyRepository, shopApi) as T // <--- 【修改这行】
+            }
+        })[ShopViewModel::class.java]
+
+        val taskViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return TaskViewModel(taskRepository, currencyRepository, taskApi) as T // <--- 【修改这行】
+            }
+        })[TaskViewModel::class.java]
+
+        val redemptionHistoryViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return RedemptionHistoryViewModel(shopApi) as T
+            }
+        })[RedemptionHistoryViewModel::class.java]
+
         scheduleDailyReminder()
+
+        // 【加回保险 2：强行给 Coil 注入信任证书的加载器】
+        // ==========================================
+        val trustAllCerts = arrayOf<TrustManager>(object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+        })
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, trustAllCerts, SecureRandom())
+
+        // 创建 Coil 专用的 OkHttpClient（不需要拦截器，只要忽略证书）
+        val coilOkHttpClient = OkHttpClient.Builder()
+            .sslSocketFactory(sslContext.socketFactory, trustAllCerts[0] as X509TrustManager)
+            .hostnameVerifier { _, _ -> true }
+            .build()
+
+        val customImageLoader = ImageLoader.Builder(this)
+            .okHttpClient(coilOkHttpClient)
+            .build()
+
+        // 强制替换全局的默认 ImageLoader
+        Coil.setImageLoader(customImageLoader)
 
         setContent {
             MySelfManagementAppTheme {
                 val navController = rememberNavController()
+
+
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
 
+
                 // 【核心修改】：在 NavHost 外部创建共享的 ViewModel 实例
+                // 在 NavHost 外部创建共享的 ViewModel 实例
                 // 这样无论在哪个页面，读取的都是同一个内存状态，实现秒级同步
                 val currencyViewModel = remember { CurrencyViewModel(currencyRepository) }
-                val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
-                val gachaViewModel = remember { GachaViewModel(currencyRepository) }
+                //val shopViewModel = remember { ShopViewModel(wishRepository, currencyRepository) }
+                //val gachaViewModel = remember { GachaViewModel(currencyRepository) }
                 val historyViewModel = remember { HistoryViewModel(taskRepository, currencyRepository) }
-                val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
+                //val taskViewModel = remember { TaskViewModel(taskRepository, currencyRepository) }
 
                 val authViewModel: AuthViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
@@ -107,13 +231,20 @@ class MainActivity : ComponentActivity() {
                     }
                 )
 
+                // 控制底部栏是否显示：非启动页且不是专注计时界面时显示
+                val showBottomBar by remember(currentRoute) {
+                    derivedStateOf {
+                        currentRoute != null && currentRoute != "splash" && !currentRoute.startsWith("focusTimer")
+                    }
+                }
+
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     Scaffold(
                         bottomBar = {
-                            if (currentRoute != "splash") {
+                            if (showBottomBar) {
                                 NavigationBar(
                                     containerColor = Color.White,
                                     tonalElevation = 0.dp
@@ -161,7 +292,11 @@ class MainActivity : ComponentActivity() {
                             }
 
                             composable("tasks") {
-                                TaskScreen(taskViewModel, navController)
+                                TaskScreen(
+                                    viewModel = taskViewModel,
+                                    userViewModel = userViewModel,
+                                    navController = navController
+                                )
                             }
 
                             // 【修改 2】：整合后的商城页面 (包含抽卡和商店)
@@ -186,23 +321,66 @@ class MainActivity : ComponentActivity() {
 
                             // 这里的 history 路由保留，供个人主页跳转
                             composable("history") {
-                                HistoryScreen(historyViewModel)
+                                HistoryScreen(
+                                    viewModel = historyViewModel// 或者是 taskViewModel，取决于你原来是怎么写的
+                                )
                             }
 
+                            composable("redemption_history") {
+                                RedemptionHistoryScreen(
+                                    navController = navController,
+                                    viewModel = redemptionHistoryViewModel,
+                                    currencyViewModel = currencyViewModel
+                                )
+                            }
+
+                            composable("addWish") {
+                                AddWishScreen(
+                                    shopViewModel = shopViewModel,
+                                    navController = navController
+                                )
+                            }
+
+                            composable("addTask") {
+                                AddTaskScreen(taskViewModel, navController)
+                            }
+
+                            // 专注时长页面路由
                             composable(
-                                "addWish?wishId={wishId}",
-                                arguments = listOf(navArgument("wishId") { defaultValue = -1 })
+                                "focusTimer/{taskId}/{focusedMinutes}/{estimatedMinutes}",
+                                arguments = listOf(
+                                    navArgument("taskId") { type = NavType.IntType },
+                                    navArgument("focusedMinutes") { type = NavType.IntType },
+                                    navArgument("estimatedMinutes") { type = NavType.IntType }
+                                )
                             ) { backStackEntry ->
-                                val wishId = backStackEntry.arguments?.getInt("wishId") ?: -1
-                                AddWishScreen(shopViewModel, navController, wishId)
+                                val taskId = backStackEntry.arguments?.getInt("taskId") ?: return@composable
+                                val focusedMinutes = backStackEntry.arguments?.getInt("focusedMinutes") ?: 0
+                                val estimatedMinutes = backStackEntry.arguments?.getInt("estimatedMinutes") ?: 0
+                                FocusTimerScreen(
+                                    navController = navController,
+                                    taskId = taskId,
+                                    initialFocusedMinutes = focusedMinutes,
+                                    estimatedMinutes = estimatedMinutes,
+                                    viewModel = taskViewModel   // 传入已创建的实例
+                                )
                             }
 
-                            composable("addPeriodicTask") {
-                                AddPeriodicTaskScreen(taskViewModel, navController)
+                            // 用户画像问卷
+                            composable("questionnaire") {
+                                QuestionnaireScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
                             }
-                            composable("addOneShotTask") {
-                                AddOneShotTaskScreen(taskViewModel, navController)
+
+                            composable("onboarding") {
+                                OnboardingScreen(
+                                    viewModel = userViewModel,
+                                    navController = navController
+                                )
                             }
+
                         }
                     }
                 }

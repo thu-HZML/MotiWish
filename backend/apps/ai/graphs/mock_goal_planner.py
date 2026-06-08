@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
 from uuid import uuid4
 
+from apps.common.timezones import business_now
 from apps.ai.graphs.base import BaseAgentGraph
 from apps.ai.prompts.goal_planner import GOAL_PLANNER_SYSTEM_PROMPT
 from apps.ai.tools.context_builders import build_goal_planner_prompt_input
@@ -49,7 +49,7 @@ class MockGoalPlannerGraph(BaseAgentGraph):
                 {
                     "node": "plan_goal",
                     "status": "completed",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": business_now().isoformat(),
                     "note": f"workflow executed via provider {provider.provider_name}",
                 }
             ],

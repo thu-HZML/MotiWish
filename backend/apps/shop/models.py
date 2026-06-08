@@ -1,11 +1,6 @@
 from django.db import models
-
-from apps.common.models import TimeStampedModel, UserOwnedModel
-
-
-class WishSource(models.TextChoices):
-    MANUAL = "manual", "用户创建"
-    SYSTEM = "system", "系统推荐"
+from django.utils import timezone
+from apps.common.models import TimeStampedModel
 
 
 class WishPriceTier(models.TextChoices):
@@ -14,18 +9,13 @@ class WishPriceTier(models.TextChoices):
     LARGE = "large", "大型"
 
 
+# 合并原 ShopItemCategory 与 ShopItemKind 为统一的 category
 class ShopItemCategory(models.TextChoices):
-    GROWTH_MATERIAL = "growth_material", "养成材料"
-    UTILITY_ITEM = "utility_item", "功能轻道具"
-    WISH_REWARD = "wish_reward", "愿望奖励"
-
-
-class ShopItemKind(models.TextChoices):
     EXPERIENCE_PACK = "experience_pack", "经验材料"
     DEBT_REPAYMENT_CARD = "debt_repayment_card", "还债卡"
     TASK_FAILURE_PROTECTION_CARD = "task_failure_protection_card", "任务失败保护卡"
     INDULGENCE_DAY_CARD = "indulgence_day_card", "放纵日卡"
-    WISH = "wish", "愿望"
+    WISH = "wish", "愿望奖励"
 
 
 class ShopItemRarity(models.TextChoices):
@@ -41,21 +31,24 @@ class RedemptionStatus(models.TextChoices):
     REJECTED = "rejected", "已拒绝"
 
 
-class WishItem(UserOwnedModel):
+# 改为继承 TimeStampedModel，使 owner 可空
+class WishItem(TimeStampedModel):
+    owner = models.ForeignKey(
+        "users.User",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="wish_items",
+        verbose_name="所属用户",
+    )
     catalog_key = models.CharField(max_length=64, blank=True, db_index=True, verbose_name="目录键")
     title = models.CharField(max_length=120, verbose_name="商品名称")
     description = models.TextField(blank=True, verbose_name="商品描述")
     category = models.CharField(
-        max_length=32,
-        choices=ShopItemCategory.choices,
-        default=ShopItemCategory.WISH_REWARD,
-        verbose_name="商品大类",
-    )
-    item_kind = models.CharField(
         max_length=40,
-        choices=ShopItemKind.choices,
-        default=ShopItemKind.WISH,
-        verbose_name="商品类型",
+        choices=ShopItemCategory.choices,
+        default=ShopItemCategory.WISH,
+        verbose_name="商品分类",
     )
     rarity = models.CharField(
         max_length=16,
@@ -63,7 +56,6 @@ class WishItem(UserOwnedModel):
         default=ShopItemRarity.COMMON,
         verbose_name="稀有度",
     )
-    source = models.CharField(max_length=20, choices=WishSource.choices, default=WishSource.MANUAL)
     price_tier = models.CharField(
         max_length=16,
         choices=WishPriceTier.choices,
@@ -75,13 +67,23 @@ class WishItem(UserOwnedModel):
     is_enabled = models.BooleanField(default=True, verbose_name="是否上架")
     is_stackable = models.BooleanField(default=True, verbose_name="是否可叠加持有")
     auto_refund_on_reject = models.BooleanField(default=True, verbose_name="拒绝时自动退款")
-    ai_pricing = models.JSONField(default=dict, blank=True, verbose_name="AI 定价数据")
     effect_payload = models.JSONField(default=dict, blank=True, verbose_name="效果配置")
 
     class Meta:
         verbose_name = "商店商品"
         verbose_name_plural = "商店商品"
         ordering = ("-created_at", "-id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("catalog_key",),
+                condition=models.Q(owner__isnull=True) & ~models.Q(catalog_key=""),
+                name="unique_public_wish_item_catalog_key",
+            ),
+        ]
+
+    def __str__(self):
+        owner_info = f" [用户: {self.owner.username}]" if self.owner else " [系统公共]"
+        return f"{self.title}{owner_info}"
 
 
 class UserInventory(TimeStampedModel):
@@ -124,3 +126,33 @@ class RedemptionRecord(TimeStampedModel):
         verbose_name = "兑换记录"
         verbose_name_plural = "兑换记录"
         ordering = ("-created_at", "-id")
+
+
+class UserActiveEffect(TimeStampedModel):
+    owner = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="active_effects",
+        verbose_name="拥有者"
+    )
+    effect_type = models.CharField(max_length=50, verbose_name="效果类型")  # 例如 "indulgence_day"
+    source_item = models.ForeignKey(
+        "WishItem",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="来源道具"
+    )
+    starts_at = models.DateTimeField(verbose_name="开始时间")
+    expires_at = models.DateTimeField(verbose_name="过期时间")
+    remaining_uses = models.IntegerField(default=-1, verbose_name="剩余使用次数")  # -1代表根据时间自然过期，不受次数限制
+    effect_payload = models.JSONField(default=dict, blank=True, verbose_name="效果附加负载")
+
+    class Meta:
+        verbose_name = "用户有效效果/Buff"
+        verbose_name_plural = "用户有效效果/Buff"
+        ordering = ("-created_at",)
+
+    def is_active(self):
+        now = timezone.now()
+        return self.starts_at <= now <= self.expires_at and (self.remaining_uses == -1 or self.remaining_uses > 0)

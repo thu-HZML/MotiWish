@@ -2,18 +2,34 @@ import os
 from unittest import skipUnless
 from unittest.mock import patch
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.test import TestCase, override_settings
+from django.test import RequestFactory
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.ai.models import AITaskPricingSession
+from apps.ai.models import AITaskPricingSession, AIWishPricingSession
+from apps.ai.admin import AIWishPricingSessionAdmin
 from apps.ai.services import accept_task_pricing_session, create_task_pricing_session, revise_task_pricing_session
+from apps.users.admin import UserAdmin
 from apps.tasks.models import PricingStatus, Task
+from apps.shop.models import ShopItemCategory, WishItem
 from apps.users.models import DynamicProfile, StableProfile
 
 
 MOCK_AI_ENV = {"AI_PROVIDER": "mock", "AI_API_KEY": ""}
+
+
+def build_admin_request(user):
+    request = RequestFactory().get("/admin/")
+    request.user = user
+    SessionMiddleware(lambda req: None).process_request(request)
+    request.session.save()
+    request._messages = FallbackStorage(request)
+    return request
 
 
 class TaskPricingAssistantTests(TestCase):
@@ -36,7 +52,9 @@ class TaskPricingAssistantTests(TestCase):
         self.assertEqual(session.status, AITaskPricingSession.Status.WAITING_FEEDBACK)
         self.assertEqual(session.quote_payload["reward_primary"], expected_reward)
         self.assertEqual(session.quote_payload["penalty_primary"], expected_penalty)
-        self.assertIn("任务定价标准", session.pricing_standard_excerpt)
+        self.assertIn("pricing_bounds", session.quote_payload)
+        self.assertIn("Recommended reward", session.quote_payload["reasoning"])
+        self.assertEqual(session.pricing_standard_version, "task_pricing_v1")
         self.assertEqual(session.profile_snapshot["nickname"], "定价测试用户")
         return session
 
@@ -44,7 +62,7 @@ class TaskPricingAssistantTests(TestCase):
         self.assert_quote(
             {
                 "title": "英语听力 30 分钟",
-                "task_type": "daily",
+                "task_type": "recurring",
                 "recurrence": "daily",
                 "settlement_track": "regular",
                 "difficulty_level": "medium",
@@ -142,6 +160,39 @@ class TaskPricingAssistantTests(TestCase):
 
         self.assertEqual(len(revised.feedback_history), 1)
         self.assertGreater(revised.quote_payload["reward_primary"], session.quote_payload["reward_primary"])
+        self.assertIn("Adjusted upward from previous quote", revised.quote_payload["reasoning"])
+
+    def test_revise_task_pricing_can_reverse_after_reaching_lower_bound(self):
+        session = self._create_session(
+            {
+                "title": "整理一页错题",
+                "task_type": "one_time",
+                "recurrence": "none",
+                "settlement_track": "regular",
+                "difficulty_level": "low",
+                "progress_target": 100,
+            }
+        )
+
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            for _ in range(10):
+                session = revise_task_pricing_session(
+                    session=session,
+                    feedback_direction="too_high",
+                    feedback_text="偏高",
+                )
+            lower_bound_reward = session.quote_payload["reward_primary"]
+            session = revise_task_pricing_session(
+                session=session,
+                feedback_direction="too_low",
+                feedback_text="现在偏低了",
+            )
+
+        self.assertGreater(session.quote_payload["reward_primary"], lower_bound_reward)
+        self.assertLessEqual(
+            session.quote_payload["reward_primary"],
+            session.quote_payload["pricing_bounds"]["reward_primary"]["max"],
+        )
 
     def test_accept_task_pricing_session_creates_task_and_updates_dynamic_profile(self):
         session = self._create_session(
@@ -185,7 +236,7 @@ class TaskPricingAssistantApiTests(TestCase):
                 {
                     "task_payload": {
                         "title": "英语听力 30 分钟",
-                        "task_type": "daily",
+                        "task_type": "recurring",
                         "recurrence": "daily",
                         "settlement_track": "regular",
                         "difficulty_level": "medium",
@@ -232,6 +283,98 @@ class TaskPricingAssistantApiTests(TestCase):
         self.assertIsNotNone(accepted_data["created_task"])
         self.assertEqual(Task.objects.filter(owner=self.user, title="英语听力 30 分钟").count(), 1)
 
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_create_pricing_session_preserves_user_supplied_due_at_offset(self):
+        user_due_at = "2026-05-12T23:00:00+08:00"
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            response = self.client.post(
+                reverse("ai-task-pricing-session-list"),
+                {
+                    "task_payload": {
+                        "title": "Deadline sensitive task",
+                        "task_type": "one_time",
+                        "recurrence": "none",
+                        "settlement_track": "regular",
+                        "difficulty_level": "medium",
+                        "progress_target": 100,
+                        "due_at": user_due_at,
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        session_id = response.data["data"]["id"]
+        self.assertEqual(response.data["data"]["task_payload"]["due_at"], user_due_at)
+        self.assertEqual(AITaskPricingSession.objects.get(pk=session_id).task_payload["due_at"], user_due_at)
+
+    @override_settings(TIME_ZONE="UTC", USE_TZ=True)
+    def test_accept_pricing_session_returns_created_task_with_user_supplied_due_at(self):
+        user_due_at = "2026-05-12T23:00:00+08:00"
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            create_response = self.client.post(
+                reverse("ai-task-pricing-session-list"),
+                {
+                    "task_payload": {
+                        "title": "Deadline sensitive task",
+                        "task_type": "one_time",
+                        "recurrence": "none",
+                        "settlement_track": "regular",
+                        "difficulty_level": "medium",
+                        "progress_target": 100,
+                        "due_at": user_due_at,
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(create_response.status_code, 200)
+        session_id = create_response.data["data"]["id"]
+        accept_response = self.client.post(
+            reverse("ai-task-pricing-session-feedback", kwargs={"pk": session_id}),
+            {"action": "accept"},
+            format="json",
+        )
+
+        self.assertEqual(accept_response.status_code, 200)
+        created_task = accept_response.data["data"]["created_task"]
+        self.assertEqual(created_task["due_at"], user_due_at)
+        task = Task.objects.get(pk=created_task["id"])
+        self.assertEqual(task.pricing_snapshot["user_time_fields"]["due_at"], user_due_at)
+
+    @override_settings(TIME_ZONE="UTC", BUSINESS_TIME_ZONE="Asia/Shanghai", USE_TZ=True)
+    def test_pricing_session_returns_utc_due_at_in_business_timezone(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            create_response = self.client.post(
+                reverse("ai-task-pricing-session-list"),
+                {
+                    "task_payload": {
+                        "title": "Deadline sensitive task",
+                        "task_type": "one_time",
+                        "recurrence": "none",
+                        "settlement_track": "regular",
+                        "difficulty_level": "medium",
+                        "progress_target": 100,
+                        "due_at": "2026-05-12T15:00:00Z",
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(create_response.status_code, 200)
+        session_id = create_response.data["data"]["id"]
+        self.assertEqual(create_response.data["data"]["task_payload"]["due_at"], "2026-05-12T23:00:00+08:00")
+        self.assertEqual(AITaskPricingSession.objects.get(pk=session_id).task_payload["due_at"], "2026-05-12T23:00:00+08:00")
+
+        accept_response = self.client.post(
+            reverse("ai-task-pricing-session-feedback", kwargs={"pk": session_id}),
+            {"action": "accept"},
+            format="json",
+        )
+
+        self.assertEqual(accept_response.status_code, 200)
+        self.assertEqual(accept_response.data["data"]["created_task"]["due_at"], "2026-05-12T23:00:00+08:00")
+
     def test_create_api_validates_task_payload_shape(self):
         response = self.client.post(
             reverse("ai-task-pricing-session-list"),
@@ -273,6 +416,120 @@ class TaskPricingAssistantApiTests(TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+class WishPricingAssistantApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="wish_pricing_user",
+            email="wish-pricing@example.com",
+            password="Password123!",
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_manual_wish_pricing_accept_creates_private_shop_item(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            response = self.client.post(
+                reverse("ai-wish-pricing-session-list"),
+                {
+                    "wish_payload": {
+                        "title": "周末去喜欢的餐厅吃饭",
+                        "description": "完成本周任务后的奖励。",
+                        "tags": ["food", "rest"],
+                    }
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        session_data = response.data["data"]
+        self.assertEqual(session_data["status"], AIWishPricingSession.Status.WAITING_CONFIRMATION)
+        self.assertEqual(session_data["quote_payload"]["price_tier"], "medium")
+
+        accept_response = self.client.post(
+            reverse("ai-wish-pricing-session-confirm", kwargs={"pk": session_data["id"]}),
+            {"action": "accept"},
+            format="json",
+        )
+
+        self.assertEqual(accept_response.status_code, 200)
+        accepted_data = accept_response.data["data"]
+        self.assertEqual(accepted_data["status"], AIWishPricingSession.Status.ACCEPTED)
+        item = WishItem.objects.get(pk=accepted_data["generated_item"]["id"])
+        self.assertEqual(item.owner, self.user)
+        self.assertEqual(item.category, ShopItemCategory.WISH)
+        self.assertEqual(item.price_tier, "medium")
+        self.assertEqual(item.effect_payload["pricing_session_id"], session_data["id"])
+
+    def test_daily_refresh_is_idempotent_and_can_force_regenerate(self):
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            first_response = self.client.post(reverse("ai-wish-pricing-session-daily-refresh"), {}, format="json")
+            second_response = self.client.post(reverse("ai-wish-pricing-session-daily-refresh"), {}, format="json")
+            forced_response = self.client.post(
+                reverse("ai-wish-pricing-session-daily-refresh"),
+                {"force": True},
+                format="json",
+            )
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(second_response.status_code, 200)
+        self.assertEqual(forced_response.status_code, 200)
+        self.assertEqual(first_response.data["data"]["id"], second_response.data["data"]["id"])
+        self.assertNotEqual(first_response.data["data"]["id"], forced_response.data["data"]["id"])
+        self.assertEqual(
+            AIWishPricingSession.objects.filter(
+                owner=self.user,
+                source=AIWishPricingSession.Source.DAILY_REFRESH,
+            ).count(),
+            1,
+        )
+
+
+class WishPricingAdminActionTests(TestCase):
+    def setUp(self):
+        self.admin_user = get_user_model().objects.create_superuser(
+            username="admin_wish_tester",
+            email="admin-wish@example.com",
+            password="Password123!",
+        )
+        self.user = get_user_model().objects.create_user(
+            username="admin_target_user",
+            email="admin-target@example.com",
+            password="Password123!",
+        )
+
+    def test_user_admin_can_generate_daily_wish_candidate(self):
+        model_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            model_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        self.assertEqual(session.source, AIWishPricingSession.Source.DAILY_REFRESH)
+        self.assertEqual(session.status, AIWishPricingSession.Status.WAITING_CONFIRMATION)
+
+    def test_wish_session_admin_can_accept_candidate(self):
+        user_admin = UserAdmin(get_user_model(), admin.site)
+        request = build_admin_request(self.admin_user)
+        with patch.dict(os.environ, MOCK_AI_ENV, clear=False):
+            user_admin.generate_daily_wish_candidates(
+                request,
+                get_user_model().objects.filter(pk=self.user.pk),
+            )
+
+        session = AIWishPricingSession.objects.get(owner=self.user)
+        session_admin = AIWishPricingSessionAdmin(AIWishPricingSession, admin.site)
+        session_admin.accept_wish_candidates(request, AIWishPricingSession.objects.filter(pk=session.pk))
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, AIWishPricingSession.Status.ACCEPTED)
+        self.assertIsNotNone(session.generated_item)
+        self.assertEqual(WishItem.objects.filter(owner=self.user, category=ShopItemCategory.WISH).count(), 1)
+
+
 @skipUnless(
     os.getenv("AI_PROVIDER") in {"openai-compatible", "openai"} and bool(os.getenv("AI_API_KEY")),
     "需要在 backend/.env 中配置 AI_PROVIDER=openai-compatible 或 openai，并配置 AI_API_KEY 才运行真实模型 smoke test",
@@ -289,7 +546,7 @@ class TaskPricingLiveModelSmokeTest(TestCase):
             task_payload={
                 "title": "完成 30 分钟英语听力训练",
                 "description": "听一段材料并整理 5 个生词",
-                "task_type": "daily",
+                "task_type": "recurring",
                 "recurrence": "daily",
                 "settlement_track": "regular",
                 "difficulty_level": "medium",

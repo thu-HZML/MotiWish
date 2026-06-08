@@ -1,6 +1,10 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.ai.models import AIReportJob, AITaskPricingSession
+from apps.ai.models import AIReportJob, AITaskPricingSession, AIWishPricingSession
+from apps.common.timezones import format_business_datetime
+from apps.shop.models import ShopItemRarity, WishPriceTier
+from apps.shop.serializers import WishItemSerializer
 from apps.tasks.models import DifficultyLevel, RecurrenceType, SettlementTrack, TaskType
 from apps.tasks.serializers import TaskSerializer
 
@@ -12,8 +16,49 @@ class AIReportJobSerializer(serializers.ModelSerializer):
         read_only_fields = ("owner", "status", "summary", "result_payload")
 
 
+class TaskPricingBoundValueSerializer(serializers.Serializer):
+    min = serializers.IntegerField(help_text="当前任务建议范围下限。")
+    max = serializers.IntegerField(help_text="当前任务建议范围上限。")
+    recommended = serializers.IntegerField(help_text="本轮推荐值。")
+
+
+class TaskPricingBoundsSerializer(serializers.Serializer):
+    reward_primary = TaskPricingBoundValueSerializer(help_text="一级货币奖励建议范围。")
+    penalty_primary = TaskPricingBoundValueSerializer(help_text="失败惩罚建议范围。")
+
+
+class TaskPricingQuotePayloadSerializer(serializers.Serializer):
+    reward_primary = serializers.IntegerField(help_text="本轮建议的一级货币奖励。")
+    penalty_primary = serializers.IntegerField(help_text="本轮建议的失败惩罚。")
+    price_tier = serializers.CharField(help_text="定价档位，例如 small / medium。")
+    confidence = serializers.FloatField(help_text="报价置信度，0-1。")
+    reasoning = serializers.CharField(help_text="展示给用户的定价理由。")
+    risk_notes = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="风险或缺失信息提示。",
+    )
+    user_fit_notes = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="结合用户画像或反馈生成的说明。",
+    )
+    pricing_bounds = TaskPricingBoundsSerializer(help_text="反馈调整时使用的建议范围。")
+    llm_style_payload = serializers.JSONField(help_text="模型/规则辅助元数据。")
+
+
 class AITaskPricingSessionSerializer(serializers.ModelSerializer):
     created_task = TaskSerializer(read_only=True)
+    quote_payload = serializers.SerializerMethodField(
+        help_text=(
+            "当前 AI 定价结果。包含 reward_primary、penalty_primary、price_tier、confidence、"
+            "reasoning、risk_notes、user_fit_notes、pricing_bounds 和 llm_style_payload。"
+            "pricing_bounds 用于限制反馈调整范围，结构为 "
+            "{reward_primary: {min, max, recommended}, penalty_primary: {min, max, recommended}}。"
+        ),
+    )
+
+    @extend_schema_field(TaskPricingQuotePayloadSerializer)
+    def get_quote_payload(self, obj):
+        return obj.quote_payload
 
     class Meta:
         model = AITaskPricingSession
@@ -32,6 +77,13 @@ class AITaskPricingSessionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        task_payload = data.get("task_payload")
+        if isinstance(task_payload, dict) and task_payload.get("due_at"):
+            task_payload["due_at"] = format_business_datetime(task_payload["due_at"]) or task_payload["due_at"]
+        return data
 
 
 class TaskPricingDraftSerializer(serializers.Serializer):
@@ -88,6 +140,9 @@ class TaskPricingDraftSerializer(serializers.Serializer):
         recurrence = attrs.get("recurrence", RecurrenceType.NONE)
         settlement_track = attrs.get("settlement_track", SettlementTrack.REGULAR)
 
+        if task_type == TaskType.DAILY:
+            raise serializers.ValidationError({"task_type": "daily is reserved for daily metrics; use /api/v1/daily/evaluate/."})
+
         if attrs.get("starts_on") and attrs.get("ends_on") and attrs["starts_on"] > attrs["ends_on"]:
             raise serializers.ValidationError({"ends_on": "ends_on 不能早于 starts_on。"})
         if task_type == TaskType.ONE_TIME and recurrence != RecurrenceType.NONE:
@@ -133,3 +188,70 @@ class AITaskPricingFeedbackSerializer(serializers.Serializer):
         if attrs["action"] == "revise" and not attrs.get("feedback_direction") and not attrs.get("feedback_text"):
             raise serializers.ValidationError("revise 至少需要 feedback_direction 或 feedback_text。")
         return attrs
+
+
+class WishPricingPayloadSerializer(serializers.Serializer):
+    title = serializers.CharField(required=False, allow_blank=True, max_length=120, help_text="愿望标题。")
+    description = serializers.CharField(required=False, allow_blank=True, default="", help_text="愿望说明。")
+    price_tier = serializers.ChoiceField(
+        choices=WishPriceTier.choices,
+        required=False,
+        help_text="可选。若不传，AI 会先判断 small / medium / large。",
+    )
+    rarity = serializers.ChoiceField(choices=ShopItemRarity.choices, required=False)
+    inventory = serializers.IntegerField(required=False, min_value=1, default=1)
+    tags = serializers.ListField(child=serializers.CharField(max_length=50), required=False, default=list)
+
+
+class WishPricingQuotePayloadSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True)
+    price_tier = serializers.ChoiceField(choices=WishPriceTier.choices)
+    price_secondary = serializers.IntegerField()
+    rarity = serializers.ChoiceField(choices=ShopItemRarity.choices)
+    inventory = serializers.IntegerField()
+    reasoning = serializers.CharField()
+    risk_notes = serializers.ListField(child=serializers.CharField())
+    user_fit_notes = serializers.ListField(child=serializers.CharField())
+    pricing_bounds = serializers.JSONField()
+    llm_style_payload = serializers.JSONField()
+
+
+class AIWishPricingSessionSerializer(serializers.ModelSerializer):
+    generated_item = WishItemSerializer(read_only=True)
+    quote_payload = serializers.SerializerMethodField(help_text="AI 给出的愿望价格、档位、理由和边界。")
+
+    @extend_schema_field(WishPricingQuotePayloadSerializer)
+    def get_quote_payload(self, obj):
+        return obj.quote_payload
+
+    class Meta:
+        model = AIWishPricingSession
+        fields = "__all__"
+        read_only_fields = (
+            "owner",
+            "status",
+            "refresh_date",
+            "context_snapshot",
+            "profile_snapshot",
+            "pricing_standard_version",
+            "pricing_standard_excerpt",
+            "quote_payload",
+            "generated_item",
+            "error_message",
+            "created_at",
+            "updated_at",
+        )
+
+
+class AIWishPricingSessionCreateSerializer(serializers.Serializer):
+    wish_payload = WishPricingPayloadSerializer(help_text="待定价愿望草稿。")
+
+
+class AIWishDailyRefreshSerializer(serializers.Serializer):
+    refresh_date = serializers.DateField(required=False, allow_null=True, help_text="刷新日期，默认今天。")
+    force = serializers.BooleanField(required=False, default=False, help_text="是否强制重新生成当天候选。")
+
+
+class AIWishPricingActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=("accept", "cancel"), help_text="accept=确认创建商品；cancel=取消候选。")

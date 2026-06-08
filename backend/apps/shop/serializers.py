@@ -3,7 +3,6 @@ from rest_framework import serializers
 from apps.shop.models import (
     RedemptionRecord,
     ShopItemCategory,
-    ShopItemKind,
     ShopItemRarity,
     UserInventory,
     WishItem,
@@ -19,8 +18,7 @@ class WishItemSerializer(serializers.ModelSerializer):
         read_only_fields = ("owner", "created_at", "updated_at")
 
     def validate(self, attrs):
-        category = attrs.get("category", getattr(self.instance, "category", ShopItemCategory.WISH_REWARD))
-        item_kind = attrs.get("item_kind", getattr(self.instance, "item_kind", ShopItemKind.WISH))
+        category = attrs.get("category", getattr(self.instance, "category", ShopItemCategory.WISH))
         price_tier = attrs.get("price_tier", getattr(self.instance, "price_tier", WishPriceTier.MEDIUM))
         price_secondary = attrs.get("price_secondary", getattr(self.instance, "price_secondary", None))
         effect_payload = attrs.get("effect_payload", getattr(self.instance, "effect_payload", {}))
@@ -32,27 +30,58 @@ class WishItemSerializer(serializers.ModelSerializer):
                     {"price_secondary": f"{price_tier} 档位价格必须在 {bounds['min']} 到 {bounds['max']} 之间。"}
                 )
 
-        if category == ShopItemCategory.GROWTH_MATERIAL:
-            if item_kind != ShopItemKind.EXPERIENCE_PACK:
-                raise serializers.ValidationError({"item_kind": "养成材料目前仅支持 experience_pack。"})
+        if category == ShopItemCategory.EXPERIENCE_PACK:
             if int(effect_payload.get("experience", 0)) <= 0:
                 raise serializers.ValidationError({"effect_payload": "经验材料必须配置正数 experience。"})
-        elif category == ShopItemCategory.UTILITY_ITEM:
-            if item_kind not in {
-                ShopItemKind.DEBT_REPAYMENT_CARD,
-                ShopItemKind.TASK_FAILURE_PROTECTION_CARD,
-                ShopItemKind.INDULGENCE_DAY_CARD,
-            }:
-                raise serializers.ValidationError({"item_kind": "功能轻道具类型不合法。"})
-        elif category == ShopItemCategory.WISH_REWARD and item_kind != ShopItemKind.WISH:
-            raise serializers.ValidationError({"item_kind": "愿望奖励的商品类型必须为 wish。"})
 
+        return attrs
+
+
+
+
+class CustomWishItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WishItem
+        fields = (
+            "id",
+            "title",
+            "description",
+            "category",
+            "rarity",
+            "price_tier",
+            "price_secondary",
+            "inventory",
+            "is_enabled",
+            "auto_refund_on_reject",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "category", "is_enabled", "created_at", "updated_at")
+
+    def validate_price_secondary(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("price_secondary must be greater than 0.")
+        return value
+
+    def validate_inventory(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("inventory must be null or greater than 0.")
+        return value
+
+    def validate(self, attrs):
+        price_tier = attrs.get("price_tier", getattr(self.instance, "price_tier", WishPriceTier.MEDIUM))
+        price_secondary = attrs.get("price_secondary", getattr(self.instance, "price_secondary", None))
+        if price_secondary is not None:
+            bounds = PRICE_BOUNDS[price_tier]
+            if price_secondary < bounds["min"] or price_secondary > bounds["max"]:
+                raise serializers.ValidationError(
+                    {"price_secondary": f"{price_tier} price must be between {bounds['min']} and {bounds['max']}."}
+                )
         return attrs
 
 
 class ShopMetaSerializer(serializers.Serializer):
     categories = serializers.JSONField()
-    item_kinds = serializers.JSONField()
     rarities = serializers.JSONField()
     tiers = serializers.JSONField()
     bounds = serializers.JSONField()
@@ -94,7 +123,6 @@ class UserInventorySerializer(serializers.ModelSerializer):
 def build_shop_meta():
     return {
         "categories": [{"value": key, "label": label} for key, label in ShopItemCategory.choices],
-        "item_kinds": [{"value": key, "label": label} for key, label in ShopItemKind.choices],
         "rarities": [{"value": key, "label": label} for key, label in ShopItemRarity.choices],
         "tiers": [{"value": key, "label": label} for key, label in WishPriceTier.choices],
         "bounds": PRICE_BOUNDS,

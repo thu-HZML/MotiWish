@@ -10,6 +10,12 @@ load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-secret-key")
 DEBUG = os.getenv("DJANGO_DEBUG", "true").lower() == "true"
 ALLOWED_HOSTS = [host for host in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",") if host]
+CSRF_TRUSTED_ORIGINS = [
+    origin for origin in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if origin
+]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = os.getenv("DJANGO_SESSION_COOKIE_SECURE", "false").lower() == "true"
+CSRF_COOKIE_SECURE = os.getenv("DJANGO_CSRF_COOKIE_SECURE", "false").lower() == "true"
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -23,6 +29,7 @@ INSTALLED_APPS = [
     "apps.common",
     "apps.users",
     "apps.tasks",
+    "apps.daily",
     "apps.wallet",
     "apps.gacha",
     "apps.shop",
@@ -33,6 +40,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "apps.common.middleware.BusinessTimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -89,7 +97,8 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LANGUAGE_CODE = "zh-hans"
-TIME_ZONE = os.getenv("TIME_ZONE", "Asia/Shanghai")
+BUSINESS_TIME_ZONE = os.getenv("BUSINESS_TIME_ZONE", "Asia/Shanghai")
+TIME_ZONE = os.getenv("TIME_ZONE", BUSINESS_TIME_ZONE)
 USE_I18N = True
 USE_TZ = True
 
@@ -109,7 +118,7 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "DEFAULT_PAGINATION_CLASS": "apps.common.pagination.ApiEnvelopePageNumberPagination",
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "apps.common.exceptions.custom_exception_handler",
 }
@@ -124,7 +133,7 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "MotiWish Backend API",
-    "DESCRIPTION": "面向安卓端游戏化时间管理应用的统一后端接口。",
+    "DESCRIPTION": "面向 Android 端游戏化时间管理应用的统一后端接口。",
     "VERSION": "0.2.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SCHEMA_PATH_PREFIX": r"/api/v1/",

@@ -4,7 +4,7 @@ from apps.shop.views import RedemptionRecordViewSet, UserInventoryViewSet, WishI
 
 router = DefaultRouter()
 router.register("items", WishItemViewSet, basename="wish-item")
-router.register("inventory", UserInventoryViewSet, basename="user-inventory")
+router.register("inventory", UserInventoryViewSet, basename="user-inventory")  
 router.register("redemptions", RedemptionRecordViewSet, basename="redemption-record")
 
 urlpatterns = router.urls

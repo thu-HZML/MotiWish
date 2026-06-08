@@ -41,7 +41,7 @@ fun ShopScreen(viewModel: ShopViewModel, navController: NavController) {
                     IconButton(onClick = { navController.navigate("addWish?wishId=-1") }) {
                         Icon(Icons.Default.Add, contentDescription = "添加愿望")
                     }
-                    IconButton(onClick = { viewModel.refreshSystemWish() }) {
+                    IconButton(onClick = { viewModel.fetchRealShopItems() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "刷新系统愿望")
                     }
                 },
@@ -61,7 +61,7 @@ fun ShopScreen(viewModel: ShopViewModel, navController: NavController) {
             }
 
             items(wishes) { wish ->
-                WishCard(wish, viewModel, snackbarHostState, navController)
+                WishCard(wish, viewModel, snackbarHostState)
             }
         }
     }
