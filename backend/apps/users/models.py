@@ -199,6 +199,40 @@ class User(AbstractUser, TimeStampedModel):
         }
 
 
+class EmailVerificationCode(TimeStampedModel):
+    class Purpose(models.TextChoices):
+        REGISTER = "register", "Register"
+        PASSWORD_RESET = "password_reset", "Password reset"
+
+    email = models.EmailField(db_index=True)
+    purpose = models.CharField(max_length=32, choices=Purpose.choices)
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    sent_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Email verification code"
+        verbose_name_plural = "Email verification codes"
+        indexes = [
+            models.Index(fields=["email", "purpose", "created_at"]),
+            models.Index(fields=["email", "purpose", "used_at"]),
+        ]
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.email} {self.purpose} {self.created_at:%Y-%m-%d %H:%M:%S}"
+
+    @property
+    def is_used(self):
+        return self.used_at is not None
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+
 class StableProfile(TimeStampedModel):
     PROMPT_INTERVAL_DAYS = 3
     MULTI_SELECT_UNSPECIFIED = "unspecified"

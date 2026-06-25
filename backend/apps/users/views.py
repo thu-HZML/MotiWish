@@ -10,8 +10,11 @@ from apps.users.models import DynamicProfile, StableProfile, User
 from apps.users.serializers import (
     BaseProfileUpdateSerializer,
     DynamicProfileSerializer,
+    EmailCodeRequestSerializer,
+    EmailCodePayloadSerializer,
     JWTTokenSerializer,
     LoginSerializer,
+    PasswordResetSerializer,
     ProfileMetaSerializer,
     ProfilePromptStatusSerializer,
     RegisterSerializer,
@@ -358,6 +361,48 @@ class RegisterView(APIView):
         return api_response(data=JWTTokenSerializer.from_user(user, request), message="注册成功")
 
 
+class EmailCodeView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Users"],
+        summary="发送邮箱验证码",
+        request=EmailCodeRequestSerializer,
+        responses=api_envelope_serializer("EmailCodeResponse", EmailCodePayloadSerializer()),
+        examples=[
+            OpenApiExample(
+                "注册验证码",
+                value={"email": "alice@example.com", "purpose": "register"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "重置密码验证码",
+                value={"email": "alice@example.com", "purpose": "password_reset"},
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        serializer = EmailCodeRequestSerializer(data=request.data, context={"request": request})
+        if not serializer.is_valid():
+            return api_response(
+                data=serializer.errors,
+                message="验证码发送信息校验失败",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            payload = serializer.save()
+        except ValueError as exc:
+            return api_response(
+                data={"email": [str(exc)]},
+                message="验证码发送失败",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return api_response(data=payload, message="验证码已发送")
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
@@ -380,6 +425,43 @@ class LoginView(APIView):
         return api_response(
             data=JWTTokenSerializer.from_user(serializer.validated_data["user"], request),
             message="登录成功",
+        )
+
+
+class PasswordResetView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Users"],
+        summary="邮箱验证码重置密码",
+        request=PasswordResetSerializer,
+        responses=api_envelope_serializer("PasswordResetResponse", UserSerializer()),
+        examples=[
+            OpenApiExample(
+                "重置密码",
+                value={
+                    "email": "alice@example.com",
+                    "code": "123456",
+                    "new_password": "NewStrongPass123!",
+                    "new_password_confirm": "NewStrongPass123!",
+                },
+                request_only=True,
+            ),
+        ],
+    )
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        if not serializer.is_valid():
+            return api_response(
+                data=serializer.errors,
+                message="重置密码信息校验失败",
+                code="VALIDATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        user = serializer.save()
+        return api_response(
+            data=UserSerializer(user, context={"request": request}).data,
+            message="密码重置成功",
         )
 
 

@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from apps.ai.services import generate_daily_wish_refresh
 from apps.common.timezones import business_localdate
-from apps.users.models import DynamicProfile, StableProfile, User
+from apps.users.models import DynamicProfile, EmailVerificationCode, StableProfile, User
 
 
 class StableProfileInline(admin.StackedInline):
@@ -127,3 +127,11 @@ class DynamicProfileAdmin(admin.ModelAdmin):
     list_filter = ("sleep_quality", "mood_state", "available_time_level")
     search_fields = ("user__username", "user__email", "user__nickname", "current_top_goal", "current_main_blocker")
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(EmailVerificationCode)
+class EmailVerificationCodeAdmin(admin.ModelAdmin):
+    list_display = ("email", "purpose", "expires_at", "used_at", "attempt_count", "sent_ip", "created_at")
+    list_filter = ("purpose", "used_at", "created_at")
+    search_fields = ("email",)
+    readonly_fields = ("email", "purpose", "code_hash", "expires_at", "used_at", "attempt_count", "sent_ip", "created_at", "updated_at")
