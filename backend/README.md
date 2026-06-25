@@ -107,6 +107,22 @@ AI_MAX_RETRIES=2
 python manage.py test apps.ai -v 2
 ```
 
+## Email verification
+
+Registration and password reset use Django's email backend. Local development defaults to the console backend, so verification codes are printed in the backend process output.
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
+EMAIL_HOST=smtp.example.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+EMAIL_USE_TLS=true
+DEFAULT_FROM_EMAIL=MotiWish <noreply@example.com>
+```
+
+For automated tests, use `django.core.mail.backends.locmem.EmailBackend`.
+
 更推荐补充并运行最小 smoke test，覆盖这条链路：
 
 1. 创建用户

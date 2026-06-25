@@ -32,12 +32,20 @@ fun SplashAuthScreen(
 ) {
     val showLoginPanel by viewModel.showLoginPanel.collectAsState()
     val isRegisterMode by viewModel.isRegisterMode.collectAsState()
+    val isForgotPasswordMode by viewModel.isForgotPasswordMode.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isSendingEmailCode by viewModel.isSendingEmailCode.collectAsState()
+    val emailCodeCooldown by viewModel.emailCodeCooldown.collectAsState()
 
     val username by viewModel.username.collectAsState()
     val password by viewModel.password.collectAsState()
     val confirmPassword by viewModel.confirmPassword.collectAsState()
     val email by viewModel.email.collectAsState()
+    val emailCode by viewModel.emailCode.collectAsState()
+    val resetEmail by viewModel.resetEmail.collectAsState()
+    val resetCode by viewModel.resetCode.collectAsState()
+    val resetPassword by viewModel.resetPassword.collectAsState()
+    val resetConfirmPassword by viewModel.resetConfirmPassword.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -111,17 +119,73 @@ fun SplashAuthScreen(
                     ) {
                         // 动态标题
                         Text(
-                            text = if (isRegisterMode) "创建新账号" else "欢迎回来",
+                            text = when {
+                                isForgotPasswordMode -> "重置密码"
+                                isRegisterMode -> "创建新账号"
+                                else -> "欢迎回来"
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(24.dp))
 
+                        if (isForgotPasswordMode) {
+                            OutlinedTextField(
+                                value = resetEmail,
+                                onValueChange = { viewModel.resetEmail.value = it },
+                                label = { Text("电子邮箱") },
+                                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = resetCode,
+                                    onValueChange = { viewModel.resetCode.value = it },
+                                    label = { Text("验证码") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.sendEmailCode("password_reset") },
+                                    enabled = !isSendingEmailCode && emailCodeCooldown == 0,
+                                    modifier = Modifier.height(56.dp)
+                                ) {
+                                    Text(if (emailCodeCooldown > 0) "${emailCodeCooldown}s" else "发送")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = resetPassword,
+                                onValueChange = { viewModel.resetPassword.value = it },
+                                label = { Text("新密码") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = resetConfirmPassword,
+                                onValueChange = { viewModel.resetConfirmPassword.value = it },
+                                label = { Text("确认新密码") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                        } else {
+
                         // 用户名输入框
                         OutlinedTextField(
                             value = username,
                             onValueChange = { viewModel.username.value = it },
-                            label = { Text("用户名") },
+                            label = { Text("用户名或邮箱") },
                             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true
@@ -143,6 +207,27 @@ fun SplashAuthScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true
                                 )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = emailCode,
+                                        onValueChange = { viewModel.emailCode.value = it },
+                                        label = { Text("验证码") },
+                                        modifier = Modifier.weight(1f),
+                                        singleLine = true
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OutlinedButton(
+                                        onClick = { viewModel.sendEmailCode("register") },
+                                        enabled = !isSendingEmailCode && emailCodeCooldown == 0,
+                                        modifier = Modifier.height(56.dp)
+                                    ) {
+                                        Text(if (emailCodeCooldown > 0) "${emailCodeCooldown}s" else "发送")
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
@@ -176,12 +261,17 @@ fun SplashAuthScreen(
                                 )
                             }
                         }
+                        }
                         Spacer(modifier = Modifier.height(28.dp))
 
                         // 主操作按钮（登录 或 注册）
                         Button(
                             onClick = {
-                                if (isRegisterMode) viewModel.register() else viewModel.login()
+                                when {
+                                    isForgotPasswordMode -> viewModel.resetPasswordByEmail()
+                                    isRegisterMode -> viewModel.register()
+                                    else -> viewModel.login()
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -206,12 +296,23 @@ fun SplashAuthScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // 切换模式按钮
-                        TextButton(onClick = { viewModel.toggleMode() }) {
+                        TextButton(onClick = {
+                            if (isForgotPasswordMode) viewModel.backToLoginMode() else viewModel.toggleMode()
+                        }) {
                             Text(
                                 text = if (isRegisterMode) "已有账号？立即登录" else "没有账号？切换到注册",
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.bodyMedium
                             )
+                        }
+                        AnimatedVisibility(visible = !isRegisterMode && !isForgotPasswordMode) {
+                            TextButton(onClick = { viewModel.enterForgotPasswordMode() }) {
+                                Text(
+                                    text = "忘记密码？",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     }
                 }

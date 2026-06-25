@@ -25,7 +25,27 @@ data class RegisterRequest(
     val username: String,
     val email: String,
     val password: String,
-    @SerializedName("password_confirm") val passwordConfirm: String
+    @SerializedName("password_confirm") val passwordConfirm: String,
+    @SerializedName("email_code") val emailCode: String
+)
+
+data class EmailCodeRequest(
+    val email: String,
+    val purpose: String
+)
+
+data class EmailCodeResponse(
+    val email: String,
+    val purpose: String,
+    @SerializedName("expires_in_seconds") val expiresInSeconds: Int,
+    @SerializedName("resend_after_seconds") val resendAfterSeconds: Int
+)
+
+data class PasswordResetRequest(
+    val email: String,
+    val code: String,
+    @SerializedName("new_password") val newPassword: String,
+    @SerializedName("new_password_confirm") val newPasswordConfirm: String
 )
 
 // 登录成功后的 Token 数据
@@ -51,4 +71,10 @@ interface AuthApi {
     // 注册接口
     @POST("api/v1/users/auth/register/")
     suspend fun register(@Body request: RegisterRequest): ApiResponse<JWTToken>
+
+    @POST("api/v1/users/auth/email-code/")
+    suspend fun sendEmailCode(@Body request: EmailCodeRequest): ApiResponse<EmailCodeResponse>
+
+    @POST("api/v1/users/auth/password-reset/")
+    suspend fun resetPassword(@Body request: PasswordResetRequest): ApiResponse<UserDto>
 }

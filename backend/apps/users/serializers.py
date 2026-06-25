@@ -5,7 +5,13 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.users.models import DynamicProfile, StableProfile, User
+from apps.users.models import DynamicProfile, EmailVerificationCode, StableProfile, User
+from apps.users.services import (
+    consume_email_verification_code,
+    normalize_email,
+    send_email_verification_code,
+    validate_email_purpose_target,
+)
 
 
 def _remove_whitespace_chars(value):
@@ -96,8 +102,9 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSerializer):
-    whitespace_normalized_fields = ("username", "email", "password", "password_confirm")
+    whitespace_normalized_fields = ("username", "email", "password", "password_confirm", "email_code")
 
+    email_code = serializers.CharField(write_only=True, min_length=6, max_length=6)
     password = serializers.CharField(
         write_only=True,
         help_text="登录密码。当前规则：至少 8 位，不能与用户信息过于相似，不能是常见弱密码，不能全为数字；空白字符会被服务端忽略，不作为有效密码字符。",
@@ -114,6 +121,7 @@ class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSeriali
             "email",
             "password",
             "password_confirm",
+            "email_code",
             "nickname",
             "gender",
             "occupation",
@@ -125,9 +133,17 @@ class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSeriali
             "focus_areas",
         )
 
+    def validate_email(self, value):
+        normalized = normalize_email(value)
+        if User.objects.filter(email__iexact=normalized).exists():
+            raise serializers.ValidationError("该邮箱已被注册。")
+        return normalized
+
     def validate(self, attrs):
         password = attrs.get("password")
         password_confirm = attrs.get("password_confirm")
+        email = attrs.get("email")
+        email_code = attrs.get("email_code")
         errors = {}
 
         if password and password_confirm and password != password_confirm:
@@ -137,12 +153,22 @@ class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSeriali
             user_attrs = {
                 key: value
                 for key, value in attrs.items()
-                if key not in {"password", "password_confirm"}
+                if key not in {"password", "password_confirm", "email_code"}
             }
             try:
                 validate_password(password, user=User(**user_attrs))
             except DjangoValidationError as exc:
                 errors["password"] = list(exc.messages)
+
+        if not errors and email and email_code:
+            try:
+                consume_email_verification_code(
+                    email=email,
+                    purpose=EmailVerificationCode.Purpose.REGISTER,
+                    code=email_code,
+                )
+            except ValueError as exc:
+                errors["email_code"] = [str(exc)]
 
         if errors:
             raise serializers.ValidationError(errors)
@@ -151,6 +177,7 @@ class RegisterSerializer(AuthWhitespaceNormalizerMixin, serializers.ModelSeriali
     def create(self, validated_data):
         password = validated_data.pop("password")
         validated_data.pop("password_confirm", None)
+        validated_data.pop("email_code", None)
         user = User(**validated_data)
         user.set_password(password)
         user.save()
@@ -164,11 +191,96 @@ class LoginSerializer(AuthWhitespaceNormalizerMixin, serializers.Serializer):
     password = serializers.CharField(write_only=True, help_text="登录密码。空白字符会被服务端忽略。")
 
     def validate(self, attrs):
-        user = authenticate(username=attrs["username"], password=attrs["password"])
+        login_identifier = attrs["username"]
+        user = authenticate(username=login_identifier, password=attrs["password"])
+        if not user:
+            matched_user = User.objects.filter(email__iexact=normalize_email(login_identifier)).first()
+            if matched_user:
+                user = authenticate(username=matched_user.get_username(), password=attrs["password"])
         if not user:
             raise serializers.ValidationError("用户名或密码错误。")
         attrs["user"] = user
         return attrs
+
+
+class EmailCodeRequestSerializer(AuthWhitespaceNormalizerMixin, serializers.Serializer):
+    whitespace_normalized_fields = ("email",)
+
+    email = serializers.EmailField()
+    purpose = serializers.ChoiceField(choices=EmailVerificationCode.Purpose.choices)
+
+    def validate(self, attrs):
+        try:
+            attrs["email"] = validate_email_purpose_target(
+                email=attrs["email"],
+                purpose=attrs["purpose"],
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError({"email": [str(exc)]})
+        return attrs
+
+    def save(self, **kwargs):
+        return send_email_verification_code(
+            email=self.validated_data["email"],
+            purpose=self.validated_data["purpose"],
+            request=self.context.get("request"),
+        )
+
+
+class EmailCodePayloadSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    purpose = serializers.CharField()
+    expires_in_seconds = serializers.IntegerField()
+    resend_after_seconds = serializers.IntegerField()
+
+
+class PasswordResetSerializer(AuthWhitespaceNormalizerMixin, serializers.Serializer):
+    whitespace_normalized_fields = ("email", "code", "new_password", "new_password_confirm")
+
+    email = serializers.EmailField()
+    code = serializers.CharField(min_length=6, max_length=6)
+    new_password = serializers.CharField(write_only=True)
+    new_password_confirm = serializers.CharField(write_only=True)
+
+    def validate_email(self, value):
+        normalized = normalize_email(value)
+        if not User.objects.filter(email__iexact=normalized).exists():
+            raise serializers.ValidationError("该邮箱尚未注册。")
+        return normalized
+
+    def validate(self, attrs):
+        errors = {}
+        user = User.objects.filter(email__iexact=attrs.get("email")).first()
+
+        if attrs.get("new_password") != attrs.get("new_password_confirm"):
+            errors["new_password_confirm"] = ["两次输入的密码不一致。"]
+
+        if user and attrs.get("new_password"):
+            try:
+                validate_password(attrs["new_password"], user=user)
+            except DjangoValidationError as exc:
+                errors["new_password"] = list(exc.messages)
+
+        if not errors and user and attrs.get("code"):
+            try:
+                consume_email_verification_code(
+                    email=attrs["email"],
+                    purpose=EmailVerificationCode.Purpose.PASSWORD_RESET,
+                    code=attrs["code"],
+                )
+            except ValueError as exc:
+                errors["code"] = [str(exc)]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+        attrs["user"] = user
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.validated_data["user"]
+        user.set_password(self.validated_data["new_password"])
+        user.save(update_fields=["password", "updated_at"])
+        return user
 
 
 class BaseProfileUpdateSerializer(serializers.ModelSerializer):

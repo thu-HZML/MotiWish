@@ -132,7 +132,8 @@ class MainActivity : ComponentActivity() {
 
 
         val retrofit = Retrofit.Builder()
-            .baseUrl("https://8.147.57.94/")
+            //.baseUrl("https://8.147.57.94/")
+            .baseUrl("https://10.0.2.2/")
             //.baseUrl("http://127.0.0.1:8000/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
